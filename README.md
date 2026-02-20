@@ -1,16 +1,21 @@
-```
-                          edia            tack
- ██████████████████████  ░░░░░░  ████████ ░░░░░░ ██████
- ██  Mac Media Stack ██  ██████  ████████ ██████ ██████
- ██████████████████████  ██████  ██    ██ ██████ ██
- ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██████  ████████ ██████ ██████
- ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██  ██  ██    ██   ██   ██  ██
- ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██  ██  ██    ██   ██   ██████
- ██████████████████████
-    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀     self-hosted media server for macOS
-```
-
-A self-hosted media server that automatically finds, downloads, and organizes movies and TV shows. Browse a Netflix-like interface, click what you want, and it handles the rest.
+<div align="center">
+  <br>
+  <a href="#one-command-install">
+    <img src="https://img.shields.io/badge/MAC_MEDIA_STACK-00C853?style=for-the-badge&logo=apple&logoColor=white" alt="Mac Media Stack" height="40" />
+  </a>
+  <br><br>
+  <strong>Self-hosted media server for macOS</strong>
+  <br>
+  <sub>Automatically find, download, and organize movies and TV shows.<br>Browse a Netflix-like interface, click what you want, and it handles the rest.</sub>
+  <br><br>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" />
+  <img src="https://img.shields.io/badge/Plex-EBAF00?style=flat-square&logo=plex&logoColor=white" />
+  <img src="https://img.shields.io/badge/Sonarr-00CCFF?style=flat-square&logo=sonarr&logoColor=white" />
+  <img src="https://img.shields.io/badge/Radarr-FFC230?style=flat-square&logo=radarr&logoColor=black" />
+  <img src="https://img.shields.io/badge/qBittorrent-2F67BA?style=flat-square&logo=qbittorrent&logoColor=white" />
+  <img src="https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white" />
+  <br><br>
+</div>
 
 ## What's Included
 
