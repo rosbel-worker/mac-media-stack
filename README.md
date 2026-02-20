@@ -98,7 +98,9 @@ See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
 
 Everything else is automatic. Requests get searched, downloaded, imported, and subtitled without any manual steps.
 
-## Architecture
+## How It Works
+
+<img src="flow.gif" alt="Request to streaming flow" width="700" />
 
 ```
 You (Seerr) -> Radarr/Sonarr -> Prowlarr (search) -> qBittorrent (download via VPN) -> Plex (watch)
