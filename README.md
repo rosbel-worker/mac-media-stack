@@ -1,4 +1,14 @@
-# Media Stack Kit
+```
+                          edia            tack
+ ██████████████████████  ░░░░░░  ████████ ░░░░░░ ██████
+ ██  Mac Media Stack ██  ██████  ████████ ██████ ██████
+ ██████████████████████  ██████  ██    ██ ██████ ██
+ ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██████  ████████ ██████ ██████
+ ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██  ██  ██    ██   ██   ██  ██
+ ██ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ██  ██  ██  ██    ██   ██   ██████
+ ██████████████████████
+    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀     self-hosted media server for macOS
+```
 
 A self-hosted media server that automatically finds, downloads, and organizes movies and TV shows. Browse a Netflix-like interface, click what you want, and it handles the rest.
 
