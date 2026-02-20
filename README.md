@@ -15,7 +15,16 @@
   <img src="https://img.shields.io/badge/qBittorrent-2F67BA?style=flat-square&logo=qbittorrent&logoColor=white" />
   <img src="https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white" />
   <br><br>
+  <img src="https://img.shields.io/github/stars/liamvibecodes/mac-media-stack?style=flat-square&color=yellow" />
+  <img src="https://img.shields.io/github/license/liamvibecodes/mac-media-stack?style=flat-square" />
+  <br><br>
 </div>
+
+## Why macOS?
+
+Nearly every media server guide assumes you're running Linux. But plenty of people have a Mac mini or old MacBook sitting around that would make a great always-on server. This project is built specifically for that: native macOS paths, launchd instead of systemd, Docker Desktop instead of bare Docker, and setup scripts that just work on a Mac out of the box.
+
+---
 
 ## What's Included
 
@@ -46,6 +55,12 @@ Requires Docker Desktop and Plex already installed. Handles everything else.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 ```
+
+<details>
+<summary>See it in action</summary>
+<br>
+<img src="demo.gif" alt="Mac Media Stack install demo" width="700" />
+</details>
 
 ## Manual Quick Start
 
@@ -95,3 +110,7 @@ All services run as Docker containers. Plex runs natively on macOS. Download tra
 ## Looking for More?
 
 Check out [mac-media-stack-advanced](https://github.com/liamvibecodes/mac-media-stack-advanced) for the full power-user setup with transcoding (Tdarr), TRaSH quality profiles (Recyclarr), Plex metadata automation (Kometa), download watchdog, VPN failover, automated backups, and more.
+
+## License
+
+[MIT](LICENSE)
