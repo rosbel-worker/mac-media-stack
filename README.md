@@ -130,6 +130,13 @@ All services run as Docker containers. Plex runs natively on macOS. Download tra
 
 Check out [mac-media-stack-advanced](https://github.com/liamvibecodes/mac-media-stack-advanced) for the full power-user setup with transcoding (Tdarr), TRaSH quality profiles (Recyclarr), Plex metadata automation (Kometa), download watchdog, VPN failover, automated backups, and optional music management (Lidarr + Tidarr for Hi-Res FLAC from Tidal).
 
+## Companion Tools
+
+| Tool | What It Does |
+|------|-------------|
+| [mac-media-stack-permissions](https://github.com/liamvibecodes/mac-media-stack-permissions) | Audit and fix file permissions across your stack |
+| [mac-media-stack-backup](https://github.com/liamvibecodes/mac-media-stack-backup) | Automated backup and restore for configs and databases |
+
 ## Author
 
 Built by [@liamvibecodes](https://github.com/liamvibecodes)
