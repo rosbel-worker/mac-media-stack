@@ -2,6 +2,7 @@ services:
   gluetun:
     image: qmcgaw/gluetun@sha256:495cdc65ace4c110cf4de3d1f5f90e8a1dd2eb0f8b67151d1ad6101b2a02a476
     container_name: gluetun
+    # NET_ADMIN capability required for WireGuard VPN to modify kernel network routing tables
     cap_add:
       - NET_ADMIN
     devices:
@@ -38,6 +39,11 @@ services:
       - ${MEDIA_DIR}/Downloads:/downloads
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/TV Shows:/tv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   prowlarr:
@@ -51,6 +57,11 @@ services:
       - ${MEDIA_DIR}/config/prowlarr:/config
     ports:
       - 127.0.0.1:9696:9696
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   sonarr:
@@ -66,6 +77,11 @@ services:
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
       - 127.0.0.1:8989:8989
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   radarr:
@@ -81,6 +97,11 @@ services:
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
       - 127.0.0.1:7878:7878
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   bazarr:
@@ -96,6 +117,11 @@ services:
       - ${MEDIA_DIR}/TV Shows:/tv
     ports:
       - 127.0.0.1:6767:6767
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767/ping", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   flaresolverr:
@@ -119,6 +145,11 @@ services:
       - ${MEDIA_DIR}/config/seerr:/app/config
     ports:
       - ${SEERR_BIND_IP:-127.0.0.1}:5055:5055
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5055/api/v1/status", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   watchtower:
@@ -130,5 +161,6 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_SCHEDULE=0 0 4 * * *
     volumes:
+      # WARNING: Mounting docker.sock gives this container full control over all containers on the host
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped

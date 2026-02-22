@@ -33,6 +33,7 @@ bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
 
 - A Mac (any recent macOS)
 - An internet connection
+- At least 50GB free disk space (media libraries will need more)
 - Your VPN keys (two values: a private key and an address)
 - A free Plex account (create one at https://plex.tv if you don't have one)
 
@@ -113,7 +114,7 @@ You should see "Setup complete!" at the end.
 
 ## Step 5: Add Your VPN Keys
 
-You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. See the ProtonVPN WireGuard setup page to generate them, or use the ones provided to you.
+You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. Get your WireGuard private key from https://account.protonvpn.com/downloads#wireguard-configuration, or use the ones provided to you.
 
 1. Open the `.env` file in TextEdit:
 

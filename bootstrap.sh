@@ -208,11 +208,18 @@ if grep -q "your_wireguard_private_key_here" .env 2>/dev/null; then
         echo "You need your ProtonVPN WireGuard credentials."
         echo "If someone gave you a private key and address, enter them now."
         echo ""
-        read -s -p "  WireGuard Private Key: " vpn_key
-        echo ""
+
+        while [[ -z "$vpn_key" ]]; do
+            read -s -p "  WireGuard Private Key: " vpn_key
+            echo ""
+            if [[ -z "$vpn_key" ]]; then
+                echo -e "  ${RED}Private key cannot be empty. Please try again.${NC}"
+            fi
+        done
+
         read -p "  WireGuard Address (e.g. 10.2.0.2/32): " vpn_addr
 
-        if [[ -n "$vpn_key" && -n "$vpn_addr" ]]; then
+        if [[ -n "$vpn_addr" ]]; then
             sed -i '' "s|WIREGUARD_PRIVATE_KEY=.*|WIREGUARD_PRIVATE_KEY=$vpn_key|" .env
             sed -i '' "s|WIREGUARD_ADDRESSES=.*|WIREGUARD_ADDRESSES=$vpn_addr|" .env
             echo -e "  ${GREEN}VPN keys saved${NC}"
@@ -239,7 +246,11 @@ echo ""
 echo -e "${CYAN}Starting media stack...${NC}"
 echo "  (First run downloads ~2-3 GB, this may take a few minutes)"
 echo ""
-docker compose up -d
+if ! docker compose up -d; then
+    echo -e "${RED}Error: docker compose failed to start${NC}"
+    echo "Check logs with: docker compose logs"
+    exit 1
+fi
 
 echo ""
 echo "Waiting for core services..."

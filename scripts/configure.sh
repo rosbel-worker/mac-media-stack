@@ -51,7 +51,7 @@ fi
 source "$SCRIPT_DIR/.env"
 
 # Permanent qBittorrent password (generated randomly)
-QB_PASSWORD="media$(date +%s | shasum | head -c 8)"
+QB_PASSWORD="media$(openssl rand -hex 12)"
 CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
 
 # ============================================================
@@ -145,7 +145,7 @@ wait_for_service() {
 get_api_key() {
     local service="$1"
     local config_path="$MEDIA_DIR/config/$service/config.xml"
-    local max_attempts=15
+    local max_attempts=30
     local attempt=0
 
     while [[ $attempt -lt $max_attempts ]]; do
