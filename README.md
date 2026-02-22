@@ -79,6 +79,7 @@ bash scripts/configure.sh     # auto-configure all services
 ## Full Setup Guide
 
 See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
+Pinned digest matrix: [IMAGE_LOCK.md](IMAGE_LOCK.md)
 
 By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEERR_BIND_IP=0.0.0.0` in `.env` only if you intentionally want LAN exposure.
 
