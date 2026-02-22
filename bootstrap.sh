@@ -16,14 +16,33 @@ echo "  Mac Media Stack Installer"
 echo "=============================="
 echo ""
 
-# Check Docker
+# Detect container runtime
+detect_runtime() {
+    if [[ -d "/Applications/OrbStack.app" ]] || command -v orbstack &>/dev/null; then
+        echo "OrbStack"
+    elif [[ -d "/Applications/Docker.app" ]]; then
+        echo "Docker Desktop"
+    else
+        echo "none"
+    fi
+}
+
+RUNTIME=$(detect_runtime)
+
 if ! docker info &>/dev/null; then
-    echo -e "${RED}Docker Desktop is not running.${NC}"
-    echo "Install it from https://www.docker.com/products/docker-desktop/"
-    echo "Open it, wait for it to start, then run this again."
+    if [[ "$RUNTIME" == "none" ]]; then
+        echo -e "${RED}No container runtime found.${NC}"
+        echo ""
+        echo "Install one of these:"
+        echo "  OrbStack (recommended):  brew install orbstack"
+        echo "  Docker Desktop:          https://www.docker.com/products/docker-desktop/"
+    else
+        echo -e "${RED}$RUNTIME is not running.${NC}"
+        echo "Open $RUNTIME, wait for it to start, then run this again."
+    fi
     exit 1
 fi
-echo -e "${GREEN}OK${NC}  Docker Desktop is running"
+echo -e "${GREEN}OK${NC}  $RUNTIME is running"
 
 # Check Plex
 if [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" &>/dev/null; then

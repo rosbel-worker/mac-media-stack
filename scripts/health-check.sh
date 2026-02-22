@@ -31,14 +31,26 @@ check_service() {
     fi
 }
 
-# Check Docker is running
+# Detect container runtime
+detect_runtime() {
+    if [[ -d "/Applications/OrbStack.app" ]] || command -v orbstack &>/dev/null; then
+        echo "OrbStack"
+    elif [[ -d "/Applications/Docker.app" ]]; then
+        echo "Docker Desktop"
+    else
+        echo "Docker"
+    fi
+}
+
+RUNTIME=$(detect_runtime)
+
 if docker info &>/dev/null; then
-    echo -e "  ${GREEN}OK${NC}  Docker Desktop"
+    echo -e "  ${GREEN}OK${NC}  $RUNTIME"
     ((PASS++))
 else
-    echo -e "  ${RED}FAIL${NC}  Docker Desktop (not running)"
+    echo -e "  ${RED}FAIL${NC}  $RUNTIME (not running)"
     echo ""
-    echo "Start Docker Desktop from your Applications folder and try again."
+    echo "Start $RUNTIME and try again."
     exit 1
 fi
 
@@ -107,7 +119,7 @@ echo ""
 
 if [[ $FAIL -gt 0 ]]; then
     echo "Something's not right. Check the FAIL items above."
-    echo "Most common fix: restart Docker Desktop and wait 30 seconds."
+    echo "Most common fix: restart your container runtime (OrbStack or Docker Desktop) and wait 30 seconds."
     exit 1
 else
     echo "Everything looks good!"
