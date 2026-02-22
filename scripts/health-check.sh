@@ -11,6 +11,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/runtime.sh
 source "$SCRIPT_DIR/scripts/lib/runtime.sh"
 
+# Load media server choice
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    MEDIA_SERVER=$(sed -n 's/^MEDIA_SERVER=//p' "$SCRIPT_DIR/.env" | head -1)
+fi
+MEDIA_SERVER="${MEDIA_SERVER:-plex}"
+
 echo ""
 echo "=============================="
 echo "  Media Stack Health Check"
@@ -63,6 +69,17 @@ for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr
     fi
 done
 
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    jf_state=$(docker inspect -f '{{.State.Status}}' jellyfin 2>/dev/null)
+    if [[ "$jf_state" == "running" ]]; then
+        echo -e "  ${GREEN}OK${NC}  jellyfin"
+        ((PASS++))
+    else
+        echo -e "  ${RED}FAIL${NC}  jellyfin (${jf_state:-not found})"
+        ((FAIL++))
+    fi
+fi
+
 watchtower_state=$(docker inspect -f '{{.State.Status}}' watchtower 2>/dev/null || true)
 if [[ "$watchtower_state" == "running" ]]; then
     echo -e "  ${GREEN}OK${NC}  watchtower (autoupdate profile enabled)"
@@ -100,13 +117,24 @@ else
 fi
 
 echo ""
-echo "Plex:"
-plex_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:32400/web" 2>/dev/null)
-if [[ "$plex_status" == "200" || "$plex_status" == "302" || "$plex_status" == "301" ]]; then
-    echo -e "  ${GREEN}OK${NC}  Plex (http://localhost:32400/web)"
-    ((PASS++))
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo "Jellyfin:"
+    jf_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:8096/health" 2>/dev/null)
+    if [[ "$jf_status" == "200" ]]; then
+        echo -e "  ${GREEN}OK${NC}  Jellyfin (http://localhost:8096)"
+        ((PASS++))
+    else
+        echo -e "  ${YELLOW}SKIP${NC}  Jellyfin not reachable yet (may still be starting)"
+    fi
 else
-    echo -e "  ${YELLOW}SKIP${NC}  Plex not detected (install separately, see SETUP.md)"
+    echo "Plex:"
+    plex_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:32400/web" 2>/dev/null)
+    if [[ "$plex_status" == "200" || "$plex_status" == "302" || "$plex_status" == "301" ]]; then
+        echo -e "  ${GREEN}OK${NC}  Plex (http://localhost:32400/web)"
+        ((PASS++))
+    else
+        echo -e "  ${YELLOW}SKIP${NC}  Plex not detected (install separately, see SETUP.md)"
+    fi
 fi
 
 echo ""

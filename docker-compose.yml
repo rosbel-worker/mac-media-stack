@@ -152,6 +152,27 @@ services:
       retries: 3
     restart: unless-stopped
 
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    profiles: ["jellyfin"]
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/jellyfin:/config
+      - ${MEDIA_DIR}/Movies:/data/movies
+      - ${MEDIA_DIR}/TV Shows:/data/tvshows
+    ports:
+      - 127.0.0.1:8096:8096
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8096/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   watchtower:
     image: containrrr/watchtower@sha256:6dd50763bbd632a83cb154d5451700530d1e44200b268a4e9488fefdfcf2b038
     container_name: watchtower

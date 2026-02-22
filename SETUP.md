@@ -27,6 +27,36 @@ You can also run it locally with custom paths:
 bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
 ```
 
+To use Jellyfin instead of Plex:
+
+```bash
+bash bootstrap.sh --jellyfin
+```
+
+---
+
+## Choose Your Media Server
+
+This stack supports two media servers. Pick one:
+
+| | Plex (default) | Jellyfin |
+|---|---|---|
+| **Setup** | Install natively on macOS | Runs in Docker automatically |
+| **Account** | Requires a free Plex account | No account needed |
+| **Cost** | Free (Plex Pass optional) | Completely free and open source |
+| **Remote streaming** | Built-in (Plex Pass for some features) | Requires manual reverse proxy |
+| **Client apps** | Polished apps on every platform | Good apps, fewer platforms |
+
+**Plex** is the default. Everything works out of the box with no changes.
+
+**Jellyfin** is a fully open-source alternative. To use it, add the `--jellyfin` flag:
+
+```bash
+bash bootstrap.sh --jellyfin
+```
+
+Or for manual setup, set `MEDIA_SERVER=jellyfin` in your `.env` file.
+
 ---
 
 ## What You Need
@@ -35,7 +65,7 @@ bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
 - An internet connection
 - At least 50GB free disk space (media libraries will need more)
 - Your VPN keys (two values: a private key and an address)
-- A free Plex account (create one at https://plex.tv if you don't have one)
+- A free Plex account (create one at https://plex.tv if you don't have one), OR use Jellyfin (no account needed)
 
 ---
 
@@ -70,7 +100,9 @@ Both options use the same `docker` and `docker compose` commands. Everything in 
 
 ---
 
-## Step 2: Install Plex
+## Step 2: Install Your Media Server
+
+### Option A: Plex (default)
 
 Plex is the app that actually plays your media on your TV, phone, etc.
 
@@ -82,6 +114,10 @@ Plex is the app that actually plays your media on your TV, phone, etc.
 6. In Plex's menu bar icon, click "Open Plex" to open the web interface
 7. Sign in with your Plex account
 8. Skip the initial library setup for now (we'll point it at the right folders later)
+
+### Option B: Jellyfin
+
+No separate install needed. Jellyfin runs as a Docker container alongside the rest of the stack. Just make sure `MEDIA_SERVER=jellyfin` is set in your `.env` file (the `--jellyfin` flag does this automatically).
 
 ---
 
@@ -152,6 +188,12 @@ Then start services:
 docker compose up -d
 ```
 
+If using Jellyfin, include the profile:
+
+```bash
+docker compose --profile jellyfin up -d
+```
+
 This will download everything it needs (about 2-3 GB, may take a few minutes on the first run). You'll see each service being created. After it starts, run the health check:
 
 ```bash
@@ -162,7 +204,9 @@ Everything should show OK. If VPN shows FAIL, double-check your WireGuard keys i
 
 ---
 
-## Step 7: Set Up Plex Libraries
+## Step 7: Set Up Media Libraries
+
+### Plex
 
 1. Open Plex in your browser: http://localhost:32400/web
 2. Go to Settings (wrench icon) > Libraries > Add Library
@@ -175,6 +219,18 @@ Everything should show OK. If VPN shows FAIL, double-check your WireGuard keys i
 5. That's it. Plex will automatically scan these folders whenever new media appears.
 
 **Important:** Always access Plex at `http://localhost:32400/web` from the server Mac itself. This avoids the "Plex Pass" paywall for remote streaming setup.
+
+### Jellyfin
+
+1. Open Jellyfin in your browser: http://localhost:8096
+2. Complete the initial setup wizard (language, create admin account)
+3. Add a **Movies** library:
+   - Content type: Movies
+   - Folder: `/data/movies`
+4. Add a **TV Shows** library:
+   - Content type: Shows
+   - Folder: `/data/tvshows`
+5. Finish the wizard. Jellyfin will scan these folders automatically.
 
 ---
 
@@ -190,7 +246,7 @@ The script will:
 - Configure the download client (qBittorrent) with the right settings
 - Set up all the search indexers (where to find movies/shows)
 - Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
-- Ask you to sign in to Seerr with Plex (one browser click)
+- Ask you to sign in to Seerr with Plex or Jellyfin (one browser step)
 
 At the end it will print your qBittorrent password and save credentials/API keys to `<MEDIA_DIR>/state/first-run-credentials.txt` (mode `600`, default path `~/Media/state/first-run-credentials.txt`).
 
@@ -217,7 +273,7 @@ rm ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 
 **Day-to-day usage:**
 - Open http://localhost:5055 (Seerr) to browse and request movies/shows
-- Open http://localhost:32400/web (Plex) to watch your media
+- Open http://localhost:32400/web (Plex) or http://localhost:8096 (Jellyfin) to watch your media
 - Everything else is automatic
 
 **Bookmarks to save:**
@@ -226,6 +282,7 @@ rm ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 |------|-----|
 | Seerr (browse/request) | http://localhost:5055 |
 | Plex (watch) | http://localhost:32400/web |
+| Jellyfin (watch) | http://localhost:8096 |
 
 You probably won't need these, but just in case:
 

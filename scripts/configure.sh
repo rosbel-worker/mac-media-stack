@@ -50,6 +50,8 @@ if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
 fi
 source "$SCRIPT_DIR/.env"
 
+MEDIA_SERVER="${MEDIA_SERVER:-plex}"
+
 # Permanent qBittorrent password (generated randomly)
 QB_PASSWORD="media$(openssl rand -hex 12)"
 CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
@@ -482,8 +484,23 @@ echo ""
 echo -e "${CYAN}[6/6] Configuring Seerr...${NC}"
 echo ""
 if [[ "$NON_INTERACTIVE" == true ]]; then
-    warn "Non-interactive mode: skipping Seerr Plex sign-in prompt."
-    warn "Manually open http://localhost:5055 and sign in with Plex, then configure services in Seerr."
+    if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+        warn "Non-interactive mode: skipping Seerr Jellyfin sign-in prompt."
+        warn "Manually open http://localhost:5055, select \"Use your Jellyfin account\","
+        warn "and enter http://host.docker.internal:8096 as the Jellyfin URL."
+    else
+        warn "Non-interactive mode: skipping Seerr Plex sign-in prompt."
+        warn "Manually open http://localhost:5055 and sign in with Plex, then configure services in Seerr."
+    fi
+elif [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}http://localhost:5055${NC} in your browser"
+    echo "  1. Click \"Use your Jellyfin account\""
+    echo "  2. Enter Jellyfin URL: ${CYAN}http://host.docker.internal:8096${NC}"
+    echo "  3. Enter your Jellyfin username and password"
+    echo ""
+    read -p "  Press Enter after you've signed in to Seerr..."
+    echo ""
+    sleep 3
 else
     echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}http://localhost:5055${NC} in your browser"
     echo "  and click \"Sign In With Plex\". Log in with your Plex account."
@@ -567,7 +584,11 @@ echo ""
 echo "Your services are ready:"
 echo ""
 echo "  Seerr (browse & request):  http://localhost:5055"
-echo "  Plex (watch):              http://localhost:32400/web"
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo "  Jellyfin (watch):          http://localhost:8096"
+else
+    echo "  Plex (watch):              http://localhost:32400/web"
+fi
 echo "  qBittorrent (downloads):   http://localhost:8080"
 echo "    Username: admin"
 echo "    Password: $QB_PASSWORD"

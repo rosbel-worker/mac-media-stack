@@ -38,6 +38,7 @@ There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of the
 |---------|-------------|
 | **Seerr** | Netflix-style UI for browsing and requesting movies/shows |
 | **Plex** | Plays your media on any device (TV, phone, laptop) |
+| **Jellyfin** | Open-source alternative to Plex (opt-in via `--jellyfin` flag) |
 | **Radarr** | Automatically finds and downloads movies |
 | **Sonarr** | Automatically finds and downloads TV shows |
 | **Prowlarr** | Manages search indexers for Radarr/Sonarr |
@@ -51,7 +52,7 @@ There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of the
 
 - macOS (any recent version)
 - [OrbStack](https://orbstack.dev) (recommended) or [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- A Plex account (free)
+- A Plex account (free) or Jellyfin (no account needed)
 - ProtonVPN WireGuard credentials
 
 > **Why OrbStack?** It starts in ~2 seconds (vs 30s for Docker Desktop), uses ~1GB RAM (vs 4GB), and has 2-10x faster file I/O. It's a drop-in replacement that runs the same Docker commands. Docker Desktop works fine too.
@@ -68,6 +69,7 @@ Optional flags when running from a local clone:
 
 ```bash
 bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack --non-interactive
+bash bootstrap.sh --jellyfin  # use Jellyfin instead of Plex
 ```
 
 <details>
@@ -75,6 +77,12 @@ bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack 
 <br>
 <img src="demo.gif" alt="Mac Media Stack install demo" width="700" />
 </details>
+
+### Choosing Your Media Server
+
+**Plex** (default) runs natively on macOS. Polished apps, easy remote streaming, free Plex account required.
+
+**Jellyfin** is fully open source with no account needed. Add `--jellyfin` to the bootstrap command or set `MEDIA_SERVER=jellyfin` in `.env`. It runs as a Docker container alongside everything else.
 
 ## Manual Quick Start
 
@@ -119,7 +127,8 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | What | Where |
 |------|-------|
 | Browse and request movies/shows | http://localhost:5055 |
-| Watch your media | http://localhost:32400/web |
+| Watch your media (Plex) | http://localhost:32400/web |
+| Watch your media (Jellyfin) | http://localhost:8096 |
 
 Everything else is automatic. Requests get searched, downloaded, imported, and subtitled without any manual steps.
 
@@ -132,7 +141,7 @@ You (Seerr) -> Radarr/Sonarr -> Prowlarr (search) -> qBittorrent (download via V
                                                         Bazarr (subtitles) ^
 ```
 
-All services run as Docker containers. Plex runs natively on macOS. Download traffic routes through ProtonVPN. Everything else uses your normal internet connection.
+All services run as Docker containers. Plex runs natively on macOS (or Jellyfin runs in Docker if selected). Download traffic routes through ProtonVPN. Everything else uses your normal internet connection.
 
 ## Looking for More?
 

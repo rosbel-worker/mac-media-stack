@@ -14,6 +14,7 @@ BOOTSTRAP_DIR="$(cd "$(dirname "$0")" && pwd)"
 MEDIA_DIR="$HOME/Media"
 INSTALL_DIR="$HOME/mac-media-stack"
 NON_INTERACTIVE=false
+MEDIA_SERVER=plex
 
 usage() {
     cat <<EOF
@@ -22,6 +23,7 @@ Usage: bash bootstrap.sh [OPTIONS]
 Options:
   --media-dir DIR       Media root path (default: ~/Media)
   --install-dir DIR     Repo install directory (default: ~/mac-media-stack)
+  --jellyfin            Use Jellyfin instead of Plex as your media server
   --non-interactive     Skip interactive prompts (manual Seerr wiring required)
   --help                Show this help message
 
@@ -29,6 +31,7 @@ Examples:
   bash bootstrap.sh
   bash bootstrap.sh --media-dir /Volumes/T9/Media
   bash bootstrap.sh --media-dir /Volumes/T9/Media --non-interactive
+  bash bootstrap.sh --jellyfin
 EOF
 }
 
@@ -49,6 +52,10 @@ while [[ $# -gt 0 ]]; do
             fi
             INSTALL_DIR="$2"
             shift 2
+            ;;
+        --jellyfin)
+            MEDIA_SERVER=jellyfin
+            shift
             ;;
         --non-interactive)
             NON_INTERACTIVE=true
@@ -153,12 +160,16 @@ fi
 RUNTIME=$(detect_running_runtime)
 echo -e "${GREEN}OK${NC}  $RUNTIME is running"
 
-# Check Plex
-if [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" &>/dev/null; then
-    echo -e "${GREEN}OK${NC}  Plex detected"
+# Check media server
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo -e "${GREEN}OK${NC}  Using Jellyfin (runs in Docker)"
 else
-    echo -e "${YELLOW}WARN${NC}  Plex not detected. Install from https://www.plex.tv/media-server-downloads/"
-    echo "  You can continue and install Plex later."
+    if [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" &>/dev/null; then
+        echo -e "${GREEN}OK${NC}  Plex detected"
+    else
+        echo -e "${YELLOW}WARN${NC}  Plex not detected. Install from https://www.plex.tv/media-server-downloads/"
+        echo "  You can continue and install Plex later."
+    fi
 fi
 
 # Check git
@@ -194,6 +205,17 @@ echo ""
 # Setup
 echo -e "${CYAN}Running setup...${NC}"
 bash scripts/setup.sh --media-dir "$MEDIA_DIR"
+
+# Write media server choice to .env
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    if grep -q '^MEDIA_SERVER=' .env 2>/dev/null; then
+        sed -i '' 's/^MEDIA_SERVER=.*/MEDIA_SERVER=jellyfin/' .env
+    else
+        echo "" >> .env
+        echo "MEDIA_SERVER=jellyfin" >> .env
+    fi
+    mkdir -p "$MEDIA_DIR/config/jellyfin"
+fi
 
 echo ""
 
@@ -247,7 +269,12 @@ echo ""
 echo -e "${CYAN}Starting media stack...${NC}"
 echo "  (First run downloads ~2-3 GB, this may take a few minutes)"
 echo ""
-if ! docker compose up -d; then
+COMPOSE_CMD=(docker compose)
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    COMPOSE_CMD+=(--profile jellyfin)
+fi
+COMPOSE_CMD+=(up -d)
+if ! "${COMPOSE_CMD[@]}"; then
     echo -e "${RED}Error: docker compose failed to start${NC}"
     echo "Check logs with: docker compose logs"
     exit 1
@@ -260,6 +287,9 @@ wait_for_service "Prowlarr" "http://localhost:9696" || true
 wait_for_service "Radarr" "http://localhost:7878" || true
 wait_for_service "Sonarr" "http://localhost:8989" || true
 wait_for_service "Seerr" "http://localhost:5055" || true
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    wait_for_service "Jellyfin" "http://localhost:8096" || true
+fi
 
 # Configure
 echo ""
@@ -280,11 +310,21 @@ echo -e "  ${GREEN}Installation complete!${NC}"
 echo "=============================="
 echo ""
 echo "  Seerr (browse/request):  http://localhost:5055"
-echo "  Plex (watch):            http://localhost:32400/web"
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo "  Jellyfin (watch):        http://localhost:8096"
+else
+    echo "  Plex (watch):            http://localhost:32400/web"
+fi
 echo ""
 echo "  Media location:          $MEDIA_DIR"
 echo ""
-echo "  Next: Set up Plex libraries (Settings > Libraries > Add)"
-echo "    - Movies: $MEDIA_DIR/Movies"
-echo "    - TV Shows: $MEDIA_DIR/TV Shows"
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    echo "  Next: Set up Jellyfin libraries at http://localhost:8096"
+    echo "    - Movies: /data/movies"
+    echo "    - TV Shows: /data/tvshows"
+else
+    echo "  Next: Set up Plex libraries (Settings > Libraries > Add)"
+    echo "    - Movies: $MEDIA_DIR/Movies"
+    echo "    - TV Shows: $MEDIA_DIR/TV Shows"
+fi
 echo ""

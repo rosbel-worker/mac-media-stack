@@ -60,6 +60,15 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
 
+# Load media server choice
+MEDIA_SERVER="plex"
+if [[ -f "$ENV_FILE" ]]; then
+    env_server=$(sed -n 's/^MEDIA_SERVER=//p' "$ENV_FILE" | head -1)
+    if [[ -n "$env_server" ]]; then
+        MEDIA_SERVER="$env_server"
+    fi
+fi
+
 ok() { echo -e "  ${GREEN}OK${NC}   $1"; PASS=$((PASS + 1)); }
 warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); }
 fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); }
@@ -127,7 +136,13 @@ if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
 fi
 
 # Port checks
-for port in 5055 32400 9696 8989 7878 8080 6767 8191; do
+PORTS=(5055 9696 8989 7878 8080 6767 8191)
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    PORTS+=(8096)
+else
+    PORTS+=(32400)
+fi
+for port in "${PORTS[@]}"; do
     owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}')
     if [[ -z "$owner" ]]; then
         ok "Port $port is free"
@@ -136,8 +151,10 @@ for port in 5055 32400 9696 8989 7878 8080 6767 8191; do
     fi
 done
 
-# Plex (optional but recommended)
-if [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" >/dev/null 2>&1; then
+# Media server check
+if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
+    ok "Media server: Jellyfin (runs in Docker)"
+elif [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" >/dev/null 2>&1; then
     ok "Plex Media Server detected"
 else
     warn "Plex Media Server not detected yet"
