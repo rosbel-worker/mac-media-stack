@@ -7,6 +7,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=scripts/lib/runtime.sh
+source "$SCRIPT_DIR/scripts/lib/runtime.sh"
+
 echo ""
 echo "=============================="
 echo "  Media Stack Health Check"
@@ -28,41 +32,6 @@ check_service() {
     else
         echo -e "  ${RED}FAIL${NC}  $name (got HTTP $status)"
         ((FAIL++))
-    fi
-}
-
-# Detect container runtime
-detect_installed_runtime() {
-    local has_orbstack=0
-    local has_docker_desktop=0
-
-    if [[ -d "/Applications/OrbStack.app" ]] || command -v orbstack &>/dev/null; then
-        has_orbstack=1
-    fi
-    if [[ -d "/Applications/Docker.app" ]]; then
-        has_docker_desktop=1
-    fi
-
-    if [[ $has_orbstack -eq 1 && $has_docker_desktop -eq 1 ]]; then
-        echo "OrbStack or Docker Desktop"
-    elif [[ $has_orbstack -eq 1 ]]; then
-        echo "OrbStack"
-    elif [[ $has_docker_desktop -eq 1 ]]; then
-        echo "Docker Desktop"
-    else
-        echo "Docker"
-    fi
-}
-
-detect_running_runtime() {
-    local os_name
-    os_name=$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)
-    if [[ "$os_name" == *"OrbStack"* ]]; then
-        echo "OrbStack"
-    elif [[ "$os_name" == *"Docker Desktop"* ]]; then
-        echo "Docker Desktop"
-    else
-        echo "Docker"
     fi
 }
 

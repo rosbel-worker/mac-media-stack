@@ -18,6 +18,11 @@ jobs:
             bash -n "$f"
           done < <(find scripts -type f -name '*.sh' -print0)
 
+      - name: Validate media path usage
+        run: |
+          # Automation scripts must resolve MEDIA_DIR from env/.env, not hardcode $HOME/Media.
+          ! rg -n '\$HOME/Media' scripts/auto-heal.sh scripts/install-auto-heal.sh
+
       - name: Validate compose config
         run: |
           cp .env.example .env

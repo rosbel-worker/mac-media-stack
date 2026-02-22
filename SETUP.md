@@ -191,7 +191,7 @@ The script will:
 - Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
 - Ask you to sign in to Seerr with Plex (one browser click)
 
-At the end it will print your qBittorrent password and save credentials/API keys to `~/Media/state/first-run-credentials.txt` (mode `600`).
+At the end it will print your qBittorrent password and save credentials/API keys to `<MEDIA_DIR>/state/first-run-credentials.txt` (mode `600`, default path `~/Media/state/first-run-credentials.txt`).
 
 ---
 ## Step 9: Install Auto-Healer (Optional but Recommended)
@@ -202,7 +202,7 @@ This installs a background job that checks your stack every hour. If the VPN goe
 bash scripts/install-auto-heal.sh
 ```
 
-Logs go to `~/Media/logs/auto-heal.log` if you ever want to check what it's been doing.
+Logs go to `<MEDIA_DIR>/logs/auto-heal.log` (default `~/Media/logs/auto-heal.log`) if you ever want to check what it's been doing.
 
 To remove it later:
 ```bash

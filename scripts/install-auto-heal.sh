@@ -8,8 +8,13 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=scripts/lib/media-path.sh
+source "$SCRIPT_DIR/lib/media-path.sh"
+
+MEDIA_DIR="$(resolve_media_dir "$PROJECT_DIR")"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
-LOG_DIR="$HOME/Media/logs/launchd"
+LOG_DIR="$MEDIA_DIR/logs/launchd"
 PLIST_NAME="com.media-stack.auto-heal"
 PLIST_PATH="$LAUNCH_DIR/$PLIST_NAME.plist"
 
@@ -67,6 +72,6 @@ launchctl unload "$PLIST_PATH" 2>/dev/null || true
 launchctl load "$PLIST_PATH"
 
 echo -e "${GREEN}Auto-heal installed.${NC} Runs every hour + on login."
-echo "Logs: ~/Media/logs/auto-heal.log and ~/Media/logs/launchd/"
+echo "Logs: $MEDIA_DIR/logs/auto-heal.log and $MEDIA_DIR/logs/launchd/"
 echo ""
 echo "To uninstall: launchctl unload $PLIST_PATH && rm $PLIST_PATH"
