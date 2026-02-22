@@ -95,7 +95,9 @@ cd mac-media-stack
 bash scripts/setup.sh        # creates folders, generates .env
 # edit .env and add your VPN keys
 bash scripts/doctor.sh       # preflight validation before first boot
-docker compose up -d          # start everything
+docker compose up -d         # start everything
+# if MEDIA_SERVER=jellyfin in .env:
+docker compose --profile jellyfin up -d
 docker compose --profile autoupdate up -d watchtower  # optional auto-updates
 bash scripts/configure.sh     # auto-configure all services
 ```

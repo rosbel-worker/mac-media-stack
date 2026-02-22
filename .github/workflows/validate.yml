@@ -27,4 +27,5 @@ jobs:
         run: |
           cp .env.example .env
           docker compose --profile autoupdate config >/dev/null
+          docker compose --profile jellyfin config >/dev/null
           rm .env

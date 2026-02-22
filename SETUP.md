@@ -333,6 +333,8 @@ docker compose down
 ```bash
 cd ~/mac-media-stack
 docker compose up -d
+# If using Jellyfin:
+docker compose --profile jellyfin up -d
 ```
 
 **Need help?**

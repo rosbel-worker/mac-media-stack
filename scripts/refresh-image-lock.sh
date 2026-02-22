@@ -9,8 +9,8 @@ COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 LOCK_FILE="$SCRIPT_DIR/IMAGE_LOCK.md"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-PROFILES=(autoupdate)
-OPTIONAL_SERVICES=(watchtower)
+PROFILES=(autoupdate jellyfin)
+OPTIONAL_SERVICES=(watchtower jellyfin)
 
 for cmd in docker awk sed mktemp; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
