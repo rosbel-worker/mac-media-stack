@@ -1,10 +1,14 @@
 # Media Server Setup Guide
+
 A personal media server that automatically finds, downloads, and organizes movies and TV shows. You browse a Netflix-like interface, click what you want, and it handles the rest.
+
 **What you'll have when done:**
 - Seerr: Netflix-style browsing and request UI (this is what you'll use day-to-day)
 - Plex: Plays your media on any device (TV, phone, laptop)
 - Everything else runs in the background automatically
+
 **Time to complete:** About 20 minutes
+
 ---
 ## Quick Option: One-Command Install
 If you already have Docker Desktop and Plex installed, you can run a single command that handles everything:
@@ -111,12 +115,8 @@ The script will:
 - Set up all the search indexers (where to find movies/shows)
 - Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
 - Ask you to sign in to Seerr with Plex (one browser click)
+
 At the end it will print your qBittorrent password. Save it somewhere just in case, but you shouldn't need it for normal use.
-The script will:
-- Configure the download client (qBittorrent) with the right settings
-- Set up all the search indexers (where to find movies/shows)
-- Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
-- Ask you to sign in to Seerr with Plex (one browser click)
 ## Step 9: Install Auto-Healer (Optional but Recommended)
 This installs a background job that checks your stack every hour. If the VPN goes down or a container stops, it automatically restarts it. Set it and forget it.
 ```bash
@@ -128,19 +128,22 @@ To remove it later:
 launchctl unload ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 rm ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 ```
-At the end it will print your qBittorrent password. Save it somewhere just in case, but you shouldn't need it for normal use.
 ---
 ## You're Done!
 **Day-to-day usage:**
 - Open http://localhost:5055 (Seerr) to browse and request movies/shows
 - Open http://localhost:32400/web (Plex) to watch your media
 - Everything else is automatic
+
 **Bookmarks to save:**
+
 | What | URL |
 |------|-----|
 | Seerr (browse/request) | http://localhost:5055 |
 | Plex (watch) | http://localhost:32400/web |
+
 You probably won't need these, but just in case:
+
 | What | URL |
 |------|-----|
 | Radarr (movies admin) | http://localhost:7878 |
