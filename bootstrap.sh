@@ -209,6 +209,7 @@ if grep -q "your_wireguard_private_key_here" .env 2>/dev/null; then
         echo "If someone gave you a private key and address, enter them now."
         echo ""
 
+        vpn_key=""
         while [[ -z "$vpn_key" ]]; do
             read -s -p "  WireGuard Private Key: " vpn_key
             echo ""
