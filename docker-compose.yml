@@ -118,12 +118,13 @@ services:
     volumes:
       - ${MEDIA_DIR}/config/seerr:/app/config
     ports:
-      - 0.0.0.0:5055:5055
+      - ${SEERR_BIND_IP:-127.0.0.1}:5055:5055
     restart: unless-stopped
 
   watchtower:
     image: containrrr/watchtower:latest
     container_name: watchtower
+    profiles: ["autoupdate"]
     environment:
       - TZ=${TIMEZONE:-America/New_York}
       - WATCHTOWER_CLEANUP=true

@@ -39,7 +39,7 @@ Nearly every media server guide assumes you're running Linux. But plenty of peop
 | **Gluetun** | VPN container (ProtonVPN WireGuard) so downloads are private |
 | **Bazarr** | Auto-fetches subtitles |
 | **FlareSolverr** | Bypasses Cloudflare protection on certain indexers |
-| **Watchtower** | Keeps everything updated automatically |
+| **Watchtower** | Optional auto-updater (opt-in profile) |
 
 ## Requirements
 
@@ -72,12 +72,15 @@ cd mac-media-stack
 bash scripts/setup.sh        # creates folders, generates .env
 # edit .env and add your VPN keys
 docker compose up -d          # start everything
+docker compose --profile autoupdate up -d watchtower  # optional auto-updates
 bash scripts/configure.sh     # auto-configure all services
 ```
 
 ## Full Setup Guide
 
 See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
+
+By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEERR_BIND_IP=0.0.0.0` in `.env` only if you intentionally want LAN exposure.
 
 ## Scripts
 
@@ -116,6 +119,10 @@ All services run as Docker containers. Plex runs natively on macOS. Download tra
 ## Looking for More?
 
 Check out [mac-media-stack-advanced](https://github.com/liamvibecodes/mac-media-stack-advanced) for the full power-user setup with transcoding (Tdarr), TRaSH quality profiles (Recyclarr), Plex metadata automation (Kometa), download watchdog, VPN failover, automated backups, and optional music management (Lidarr + Tidarr for Hi-Res FLAC from Tidal).
+
+## Author
+
+Built by [@liamvibecodes](https://github.com/liamvibecodes)
 
 ## License
 

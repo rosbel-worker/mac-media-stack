@@ -92,6 +92,11 @@ When it's done, wait about 30 seconds for everything to start up, then run the h
 bash scripts/health-check.sh
 ```
 Everything should show OK. If VPN shows FAIL, double-check your WireGuard keys in Step 5.
+
+Optional: enable automatic container updates (Watchtower):
+```bash
+docker compose --profile autoupdate up -d watchtower
+```
 ---
 ## Step 7: Set Up Plex Libraries
 1. Open Plex in your browser: http://localhost:32400/web
@@ -153,7 +158,7 @@ You probably won't need these, but just in case:
 - New requests in Seerr get searched and downloaded
 - Downloads are automatically imported into Plex
 - Subtitles are auto-fetched (English)
-- Container updates happen at 4am daily (Watchtower)
+- If enabled, container updates happen at 4am daily (Watchtower)
 - Everything survives reboots (Docker + Plex both auto-start)
 ---
 ## Troubleshooting
