@@ -1,12 +1,37 @@
 #!/bin/bash
 # Media Stack Setup Helper
 # Creates all required folders and prepares the .env file.
+# Usage: bash scripts/setup.sh [--help]
 
 set -e
 
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+usage() {
+    cat <<EOF
+Usage: bash scripts/setup.sh
+
+Creates Media folder structure and generates .env from .env.example.
+
+Options:
+  --help    Show this help message
+EOF
+}
+
+case "${1:-}" in
+    "" ) ;;
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+esac
 
 echo ""
 echo "=============================="
