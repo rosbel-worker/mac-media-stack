@@ -182,7 +182,6 @@ The script will:
 At the end it will print your qBittorrent password. Save it somewhere just in case, but you shouldn't need it for normal use.
 
 ---
-
 ## Step 9: Install Auto-Healer (Optional but Recommended)
 
 This installs a background job that checks your stack every hour. If the VPN goes down or a container stops, it automatically restarts it. Set it and forget it.
@@ -209,12 +208,14 @@ rm ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 - Everything else is automatic
 
 **Bookmarks to save:**
+
 | What | URL |
 |------|-----|
 | Seerr (browse/request) | http://localhost:5055 |
 | Plex (watch) | http://localhost:32400/web |
 
 You probably won't need these, but just in case:
+
 | What | URL |
 |------|-----|
 | Radarr (movies admin) | http://localhost:7878 |
@@ -225,9 +226,8 @@ You probably won't need these, but just in case:
 - New requests in Seerr get searched and downloaded
 - Downloads are automatically imported into Plex
 - Subtitles are auto-fetched (English)
-- Container updates happen at 4am daily (Watchtower)
-- Everything survives reboots (OrbStack/Docker Desktop + Plex both auto-start)
-
+- If enabled, container updates happen at 4am daily (Watchtower)
+- Everything survives reboots (OrbStack or Docker Desktop + Plex auto-start)
 ---
 
 ## Troubleshooting
