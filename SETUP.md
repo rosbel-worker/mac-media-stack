@@ -33,6 +33,12 @@ To use Jellyfin instead of Plex:
 bash bootstrap.sh --jellyfin
 ```
 
+Already on an older clone and want the newest release tag:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/scripts/update-to-latest-release.sh)
+```
+
 ---
 
 ## Choose Your Media Server

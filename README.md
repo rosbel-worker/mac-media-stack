@@ -73,6 +73,22 @@ bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack 
 bash bootstrap.sh --jellyfin  # use Jellyfin instead of Plex
 ```
 
+## Update Existing Clone
+
+Already cloned an older version and want the latest release tag without reinstalling?
+
+One-liner (run inside your existing clone directory):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/scripts/update-to-latest-release.sh)
+```
+
+Local script (once present):
+
+```bash
+bash scripts/update-to-latest-release.sh
+```
+
 <details>
 <summary>See it in action</summary>
 <br>
@@ -119,6 +135,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/health-check.sh` | Checks if everything is running correctly |
 | `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
+| `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |
 
 ## What It Looks Like
