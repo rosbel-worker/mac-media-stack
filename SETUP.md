@@ -19,9 +19,16 @@ If you already have OrbStack (or Docker Desktop) and Plex installed, you can run
 curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 ```
 
-It will prompt you for VPN keys and walk you through the Seerr login. If you'd rather do each step yourself, continue with the manual guide below.
+It will prompt you for VPN credentials and walk you through the Seerr login. If you'd rather do each step yourself, continue with the manual guide below.
 
-You can also run it locally with custom paths:
+Pass flags to the one-command installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash -s -- --jellyfin
+curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash -s -- --pia
+```
+
+Run it locally with custom paths:
 
 ```bash
 bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
@@ -153,7 +160,9 @@ If you don't have git installed, your Mac will prompt you to install Command Lin
 This creates all the folders and prepares your configuration file.
 
 ```bash
-bash scripts/setup.sh
+bash scripts/setup.sh          # ProtonVPN defaults
+# or:
+bash scripts/setup.sh --pia    # PIA defaults
 ```
 
 You should see "Setup complete!" at the end.
@@ -186,11 +195,34 @@ WIREGUARD_ADDRESSES=10.2.0.2/32
 
 ### PIA (Private Internet Access)
 
-If you used `--pia` during bootstrap or set `VPN_PROVIDER=pia` in `.env`, fill in your PIA credentials instead:
+If you used `--pia` during bootstrap or `bash scripts/setup.sh --pia`, fill in your PIA credentials:
 
 ```
 OPENVPN_USER=p1234567
 OPENVPN_PASSWORD=your_pia_password_here
+```
+
+If you changed to `VPN_PROVIDER=pia` manually, make sure these VPN connection lines are also set:
+
+```
+VPN_PROVIDER=pia
+VPN_SERVICE_PROVIDER=private internet access
+VPN_TYPE=openvpn
+SERVER_COUNTRIES=
+SERVER_REGIONS=US East
+VPN_PORT_FORWARDING_PROVIDER=
+```
+
+`VPN_PORT_FORWARDING_PROVIDER` controls which provider-specific forwarding code is used. Leave it empty to use the current VPN provider automatically. If you set it explicitly for PIA, use exactly `private internet access`. Do not use `pia` for this field.
+
+PIA example:
+
+```env
+VPN_SERVICE_PROVIDER=private internet access
+VPN_TYPE=openvpn
+VPN_PORT_FORWARDING_PROVIDER=
+# optional explicit override:
+# VPN_PORT_FORWARDING_PROVIDER=private internet access
 ```
 
 Save and close TextEdit (Cmd+S, then Cmd+Q)

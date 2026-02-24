@@ -66,6 +66,13 @@ Requires OrbStack (or Docker Desktop) and Plex already installed. Handles everyt
 curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 ```
 
+Pass flags to the one-command installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash -s -- --jellyfin
+curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash -s -- --pia
+```
+
 Optional flags when running from a local clone:
 
 ```bash
@@ -102,6 +109,14 @@ bash scripts/update-to-latest-release.sh
 
 **Jellyfin** is fully open source with no account needed. Add `--jellyfin` to the bootstrap command or set `MEDIA_SERVER=jellyfin` in `.env`. It runs as a Docker container alongside everything else.
 
+### Choosing Your VPN Provider
+
+**ProtonVPN** is the default and uses WireGuard credentials.
+
+**PIA** uses OpenVPN credentials. Add `--pia` to bootstrap to auto-configure all VPN settings in `.env`.
+
+`VPN_PORT_FORWARDING_PROVIDER` controls which provider-specific forwarding code is used. Leave it empty to use the current VPN provider automatically. If you set it explicitly for PIA, use exactly `private internet access`. Do not use `pia` for this field.
+
 ## Manual Quick Start
 
 If you prefer to run each step yourself:
@@ -109,8 +124,9 @@ If you prefer to run each step yourself:
 ```bash
 git clone https://github.com/liamvibecodes/mac-media-stack.git
 cd mac-media-stack
-bash scripts/setup.sh        # creates folders, generates .env
-# edit .env and add your VPN keys
+bash scripts/setup.sh        # creates folders, generates .env (ProtonVPN defaults)
+# or: bash scripts/setup.sh --pia
+# edit .env and add your VPN credentials
 bash scripts/doctor.sh       # preflight validation before first boot
 docker compose up -d         # start everything
 # if MEDIA_SERVER=jellyfin in .env:
