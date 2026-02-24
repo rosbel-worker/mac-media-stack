@@ -44,7 +44,7 @@ There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of the
 | **Sonarr** | Automatically finds and downloads TV shows |
 | **Prowlarr** | Manages search indexers for Radarr/Sonarr |
 | **qBittorrent** | Downloads torrents through a VPN tunnel |
-| **Gluetun** | VPN container (ProtonVPN WireGuard) so downloads are private |
+| **Gluetun** | VPN container (ProtonVPN or PIA) so downloads are private |
 | **Bazarr** | Auto-fetches subtitles |
 | **FlareSolverr** | Bypasses Cloudflare protection on certain indexers |
 | **Watchtower** | Optional auto-updater (opt-in profile) |
@@ -54,7 +54,7 @@ There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of the
 - macOS (any recent version)
 - [OrbStack](https://orbstack.dev) (recommended) or [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - A Plex account (free) or Jellyfin (no account needed)
-- ProtonVPN WireGuard credentials
+- VPN credentials (ProtonVPN or PIA)
 
 > **Why OrbStack?** It starts in ~2 seconds (vs 30s for Docker Desktop), uses ~1GB RAM (vs 4GB), and has 2-10x faster file I/O. It's a drop-in replacement that runs the same Docker commands. Docker Desktop works fine too.
 
@@ -71,6 +71,7 @@ Optional flags when running from a local clone:
 ```bash
 bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack --non-interactive
 bash bootstrap.sh --jellyfin  # use Jellyfin instead of Plex
+bash bootstrap.sh --pia       # use PIA instead of ProtonVPN
 ```
 
 ## Update Existing Clone
@@ -161,7 +162,7 @@ You (Seerr) -> Radarr/Sonarr -> Prowlarr (search) -> qBittorrent (download via V
                                                         Bazarr (subtitles) ^
 ```
 
-All services run as Docker containers. Plex runs natively on macOS (or Jellyfin runs in Docker if selected). Download traffic routes through ProtonVPN. Everything else uses your normal internet connection.
+All services run as Docker containers. Plex runs natively on macOS (or Jellyfin runs in Docker if selected). Download traffic routes through your VPN provider (ProtonVPN or PIA). Everything else uses your normal internet connection.
 
 ## Looking for More?
 

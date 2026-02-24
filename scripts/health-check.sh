@@ -17,6 +17,12 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
 fi
 MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 
+# Load VPN provider choice
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    VPN_PROVIDER=$(sed -n 's/^VPN_PROVIDER=//p' "$SCRIPT_DIR/.env" | head -1)
+fi
+VPN_PROVIDER="${VPN_PROVIDER:-protonvpn}"
+
 echo ""
 echo "=============================="
 echo "  Media Stack Health Check"

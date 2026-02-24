@@ -69,6 +69,15 @@ if [[ -f "$ENV_FILE" ]]; then
     fi
 fi
 
+# Load VPN provider choice
+VPN_PROVIDER="protonvpn"
+if [[ -f "$ENV_FILE" ]]; then
+    env_vpn=$(sed -n 's/^VPN_PROVIDER=//p' "$ENV_FILE" | head -1)
+    if [[ -n "$env_vpn" ]]; then
+        VPN_PROVIDER="$env_vpn"
+    fi
+fi
+
 ok() { echo -e "  ${GREEN}OK${NC}   $1"; PASS=$((PASS + 1)); }
 warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); }
 fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); }
@@ -102,16 +111,31 @@ fi
 # .env
 if [[ -f "$ENV_FILE" ]]; then
     ok ".env exists"
-    if grep -q '^WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here' "$ENV_FILE"; then
-        fail "WIREGUARD_PRIVATE_KEY is still a placeholder in .env"
+    if [[ "$VPN_PROVIDER" == "pia" ]]; then
+        pia_user=$(sed -n 's/^OPENVPN_USER=//p' "$ENV_FILE" | head -1)
+        pia_pass=$(sed -n 's/^OPENVPN_PASSWORD=//p' "$ENV_FILE" | head -1)
+        if [[ -z "$pia_user" ]]; then
+            fail "OPENVPN_USER is empty in .env"
+        else
+            ok "OPENVPN_USER appears set"
+        fi
+        if [[ -z "$pia_pass" ]]; then
+            fail "OPENVPN_PASSWORD is empty in .env"
+        else
+            ok "OPENVPN_PASSWORD appears set"
+        fi
     else
-        ok "WIREGUARD_PRIVATE_KEY appears set"
-    fi
+        if grep -q '^WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here' "$ENV_FILE"; then
+            fail "WIREGUARD_PRIVATE_KEY is still a placeholder in .env"
+        else
+            ok "WIREGUARD_PRIVATE_KEY appears set"
+        fi
 
-    if grep -q '^WIREGUARD_ADDRESSES=your_wireguard_address_here' "$ENV_FILE"; then
-        fail "WIREGUARD_ADDRESSES is still a placeholder in .env"
-    else
-        ok "WIREGUARD_ADDRESSES appears set"
+        if grep -q '^WIREGUARD_ADDRESSES=your_wireguard_address_here' "$ENV_FILE"; then
+            fail "WIREGUARD_ADDRESSES is still a placeholder in .env"
+        else
+            ok "WIREGUARD_ADDRESSES appears set"
+        fi
     fi
 else
     fail ".env is missing (run: bash scripts/setup.sh)"

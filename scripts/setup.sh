@@ -87,11 +87,16 @@ else
     chmod 600 "$SCRIPT_DIR/.env"
     echo -e "  ${GREEN}Done${NC}"
     echo ""
-    echo -e "${YELLOW}IMPORTANT:${NC} You still need to add your VPN keys to .env"
+    # Read VPN_PROVIDER from newly created .env
+    vpn_provider=$(sed -n 's/^VPN_PROVIDER=//p' "$SCRIPT_DIR/.env" | head -1)
+    vpn_provider="${vpn_provider:-protonvpn}"
+    echo -e "${YELLOW}IMPORTANT:${NC} You still need to add your VPN credentials to .env"
     echo "  Open .env in a text editor and fill in:"
-    echo "    - WIREGUARD_PRIVATE_KEY"
-    echo "    - WIREGUARD_ADDRESSES"
-    echo "  (from your ProtonVPN account or provided to you)"
+    if [[ "$vpn_provider" == "pia" ]]; then
+        echo "    - OPENVPN_USER and OPENVPN_PASSWORD (from your PIA account)"
+    else
+        echo "    - WIREGUARD_PRIVATE_KEY and WIREGUARD_ADDRESSES (from your ProtonVPN account)"
+    fi
 fi
 
 echo ""

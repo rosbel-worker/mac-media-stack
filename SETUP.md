@@ -33,6 +33,12 @@ To use Jellyfin instead of Plex:
 bash bootstrap.sh --jellyfin
 ```
 
+To use PIA instead of ProtonVPN:
+
+```bash
+bash bootstrap.sh --pia
+```
+
 Already on an older clone and want the newest release tag:
 
 ```bash
@@ -70,7 +76,7 @@ Or for manual setup, set `MEDIA_SERVER=jellyfin` in your `.env` file.
 - A Mac (any recent macOS)
 - An internet connection
 - At least 50GB free disk space (media libraries will need more)
-- Your VPN keys (two values: a private key and an address)
+- Your VPN credentials (ProtonVPN: WireGuard private key + address, or PIA: username + password)
 - A free Plex account (create one at https://plex.tv if you don't have one), OR use Jellyfin (no account needed)
 
 ---
@@ -154,29 +160,40 @@ You should see "Setup complete!" at the end.
 
 ---
 
-## Step 5: Add Your VPN Keys
+## Step 5: Add Your VPN Credentials
 
-You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. Get your WireGuard private key from https://account.protonvpn.com/downloads#wireguard-configuration, or use the ones provided to you.
-
-1. Open the `.env` file in TextEdit:
+Open the `.env` file in TextEdit:
 
 ```bash
 open -a TextEdit .env
 ```
 
-2. Find these two lines near the bottom:
+### ProtonVPN (default)
+
+You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. Get your WireGuard private key from https://account.protonvpn.com/downloads#wireguard-configuration, or use the ones provided to you.
+
+Find these lines in `.env`:
 ```
 WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here
 WIREGUARD_ADDRESSES=your_wireguard_address_here
 ```
 
-3. Replace the placeholder text with your actual values. For example:
+Replace the placeholder text with your actual values. For example:
 ```
 WIREGUARD_PRIVATE_KEY=aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890abcdefg=
 WIREGUARD_ADDRESSES=10.2.0.2/32
 ```
 
-4. Save and close TextEdit (Cmd+S, then Cmd+Q)
+### PIA (Private Internet Access)
+
+If you used `--pia` during bootstrap or set `VPN_PROVIDER=pia` in `.env`, fill in your PIA credentials instead:
+
+```
+OPENVPN_USER=p1234567
+OPENVPN_PASSWORD=your_pia_password_here
+```
+
+Save and close TextEdit (Cmd+S, then Cmd+Q)
 
 ---
 
@@ -206,7 +223,7 @@ This will download everything it needs (about 2-3 GB, may take a few minutes on 
 bash scripts/health-check.sh
 ```
 
-Everything should show OK. If VPN shows FAIL, double-check your WireGuard keys in Step 5.
+Everything should show OK. If VPN shows FAIL, double-check your VPN credentials in Step 5.
 
 ---
 
@@ -312,7 +329,7 @@ You probably won't need these, but just in case:
 Open OrbStack (or Docker Desktop). Wait 30 seconds. Run `bash scripts/health-check.sh`.
 
 **VPN health check fails:**
-Double-check your WireGuard keys in `.env`. Make sure there are no extra spaces. Then restart:
+Double-check your VPN credentials in `.env` (WireGuard keys for ProtonVPN, or username/password for PIA). Make sure there are no extra spaces. Then restart:
 ```bash
 docker compose restart gluetun
 ```
