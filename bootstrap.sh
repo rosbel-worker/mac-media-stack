@@ -211,7 +211,11 @@ echo ""
 
 # Setup
 echo -e "${CYAN}Running setup...${NC}"
-bash scripts/setup.sh --media-dir "$MEDIA_DIR"
+SETUP_ARGS=(--media-dir "$MEDIA_DIR")
+if [[ "$VPN_PROVIDER" == "pia" ]]; then
+    SETUP_ARGS+=(--pia)
+fi
+bash scripts/setup.sh "${SETUP_ARGS[@]}"
 
 # Write media server choice to .env
 if grep -q '^MEDIA_SERVER=' .env 2>/dev/null; then
@@ -230,8 +234,12 @@ if [[ "$VPN_PROVIDER" == "pia" ]]; then
     sed -i '' "s/^VPN_SERVICE_PROVIDER=.*/VPN_SERVICE_PROVIDER=private internet access/" .env
     sed -i '' "s/^VPN_TYPE=.*/VPN_TYPE=openvpn/" .env
     sed -i '' "s/^SERVER_COUNTRIES=.*/SERVER_COUNTRIES=/" .env
-    sed -i '' "s/^SERVER_REGIONS=.*/SERVER_REGIONS=US East/" .env
+    sed -i '' "s/^SERVER_REGIONS=.*/SERVER_REGIONS=/" .env
     sed -i '' "s/^VPN_PORT_FORWARDING_PROVIDER=.*/VPN_PORT_FORWARDING_PROVIDER=/" .env
+    # Gluetun parses WireGuard addresses even when VPN_TYPE=openvpn.
+    # Keep these empty for PIA to avoid placeholder parse failures.
+    sed -i '' "s/^WIREGUARD_PRIVATE_KEY=.*/WIREGUARD_PRIVATE_KEY=/" .env
+    sed -i '' "s/^WIREGUARD_ADDRESSES=.*/WIREGUARD_ADDRESSES=/" .env
 else
     sed -i '' "s/^VPN_SERVICE_PROVIDER=.*/VPN_SERVICE_PROVIDER=protonvpn/" .env
     sed -i '' "s/^VPN_TYPE=.*/VPN_TYPE=wireguard/" .env

@@ -13,6 +13,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 MEDIA_DIR="$HOME/Media"
+MEDIA_DIR_SET_BY_FLAG=false
 
 PASS=0
 WARN=0
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             MEDIA_DIR="$2"
+            MEDIA_DIR_SET_BY_FLAG=true
             shift 2
             ;;
         --help|-h)
@@ -52,7 +54,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -f "$ENV_FILE" ]]; then
+if [[ "$MEDIA_DIR_SET_BY_FLAG" != true ]] && [[ -f "$ENV_FILE" ]]; then
     env_media=$(sed -n 's/^MEDIA_DIR=//p' "$ENV_FILE" | head -1)
     if [[ -n "$env_media" ]]; then
         MEDIA_DIR="$env_media"
@@ -210,7 +212,7 @@ else
     PORTS+=(32400)
 fi
 for port in "${PORTS[@]}"; do
-    owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}')
+    owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}' || true)
     if [[ -z "$owner" ]]; then
         ok "Port $port is free"
     else

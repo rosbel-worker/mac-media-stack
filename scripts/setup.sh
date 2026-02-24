@@ -137,8 +137,12 @@ if [[ "$VPN_PROVIDER_OVERRIDE" == "pia" ]]; then
     set_env_key "VPN_SERVICE_PROVIDER" "private internet access"
     set_env_key "VPN_TYPE" "openvpn"
     set_env_key "SERVER_COUNTRIES" ""
-    set_env_key "SERVER_REGIONS" "US East"
+    set_env_key "SERVER_REGIONS" ""
     set_env_key "VPN_PORT_FORWARDING_PROVIDER" ""
+    # Gluetun parses WireGuard addresses even when using OpenVPN.
+    # Clear placeholders to prevent parse errors on startup.
+    set_env_key "WIREGUARD_PRIVATE_KEY" ""
+    set_env_key "WIREGUARD_ADDRESSES" ""
 else
     # If provider is already set to PIA, normalize obvious Proton defaults
     # that may have been added from .env.example during sync.
@@ -149,6 +153,8 @@ else
         server_countries="$(get_env_key "SERVER_COUNTRIES")"
         server_regions="$(get_env_key "SERVER_REGIONS")"
         vpn_pf_provider="$(get_env_key "VPN_PORT_FORWARDING_PROVIDER")"
+        wg_private_key="$(get_env_key "WIREGUARD_PRIVATE_KEY")"
+        wg_addresses="$(get_env_key "WIREGUARD_ADDRESSES")"
 
         if [[ -z "$vpn_service_provider" || "$vpn_service_provider" == "protonvpn" ]]; then
             set_env_key "VPN_SERVICE_PROVIDER" "private internet access"
@@ -159,11 +165,16 @@ else
         if [[ "$server_countries" == "United States" ]]; then
             set_env_key "SERVER_COUNTRIES" ""
         fi
-        if [[ -z "$server_regions" ]]; then
-            set_env_key "SERVER_REGIONS" "US East"
-        fi
+        # Leave SERVER_REGIONS empty by default for PIA so the port-forward-only
+        # filter can match any valid region.
         if [[ "$vpn_pf_provider" == "protonvpn" ]]; then
             set_env_key "VPN_PORT_FORWARDING_PROVIDER" ""
+        fi
+        if [[ "$wg_private_key" == "your_wireguard_private_key_here" ]]; then
+            set_env_key "WIREGUARD_PRIVATE_KEY" ""
+        fi
+        if [[ "$wg_addresses" == "your_wireguard_address_here" ]]; then
+            set_env_key "WIREGUARD_ADDRESSES" ""
         fi
     fi
 fi
