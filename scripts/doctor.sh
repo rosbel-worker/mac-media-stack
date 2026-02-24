@@ -78,6 +78,11 @@ if [[ -f "$ENV_FILE" ]]; then
     fi
 fi
 
+get_env_value() {
+    local key="$1"
+    sed -n "s/^${key}=//p" "$ENV_FILE" | head -1
+}
+
 ok() { echo -e "  ${GREEN}OK${NC}   $1"; PASS=$((PASS + 1)); }
 warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); }
 fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); }
@@ -112,8 +117,23 @@ fi
 if [[ -f "$ENV_FILE" ]]; then
     ok ".env exists"
     if [[ "$VPN_PROVIDER" == "pia" ]]; then
-        pia_user=$(sed -n 's/^OPENVPN_USER=//p' "$ENV_FILE" | head -1)
-        pia_pass=$(sed -n 's/^OPENVPN_PASSWORD=//p' "$ENV_FILE" | head -1)
+        vpn_service_provider=$(get_env_value "VPN_SERVICE_PROVIDER")
+        vpn_type=$(get_env_value "VPN_TYPE")
+        pia_user=$(get_env_value "OPENVPN_USER")
+        pia_pass=$(get_env_value "OPENVPN_PASSWORD")
+
+        if [[ "$vpn_service_provider" == "private internet access" ]]; then
+            ok "VPN_SERVICE_PROVIDER is set for PIA"
+        else
+            fail "VPN_SERVICE_PROVIDER must be 'private internet access' when VPN_PROVIDER=pia"
+        fi
+
+        if [[ "$vpn_type" == "openvpn" ]]; then
+            ok "VPN_TYPE is set to openvpn for PIA"
+        else
+            fail "VPN_TYPE must be openvpn when VPN_PROVIDER=pia"
+        fi
+
         if [[ -z "$pia_user" ]]; then
             fail "OPENVPN_USER is empty in .env"
         else
@@ -124,18 +144,41 @@ if [[ -f "$ENV_FILE" ]]; then
         else
             ok "OPENVPN_PASSWORD appears set"
         fi
-    else
-        if grep -q '^WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here' "$ENV_FILE"; then
+    elif [[ "$VPN_PROVIDER" == "protonvpn" ]]; then
+        vpn_service_provider=$(get_env_value "VPN_SERVICE_PROVIDER")
+        vpn_type=$(get_env_value "VPN_TYPE")
+        wg_private_key=$(get_env_value "WIREGUARD_PRIVATE_KEY")
+        wg_addresses=$(get_env_value "WIREGUARD_ADDRESSES")
+
+        if [[ "$vpn_service_provider" == "protonvpn" ]]; then
+            ok "VPN_SERVICE_PROVIDER is set for ProtonVPN"
+        else
+            fail "VPN_SERVICE_PROVIDER must be protonvpn when VPN_PROVIDER=protonvpn"
+        fi
+
+        if [[ "$vpn_type" == "wireguard" ]]; then
+            ok "VPN_TYPE is set to wireguard for ProtonVPN"
+        else
+            fail "VPN_TYPE must be wireguard when VPN_PROVIDER=protonvpn"
+        fi
+
+        if [[ -z "$wg_private_key" ]]; then
+            fail "WIREGUARD_PRIVATE_KEY is empty in .env"
+        elif [[ "$wg_private_key" == "your_wireguard_private_key_here" ]]; then
             fail "WIREGUARD_PRIVATE_KEY is still a placeholder in .env"
         else
             ok "WIREGUARD_PRIVATE_KEY appears set"
         fi
 
-        if grep -q '^WIREGUARD_ADDRESSES=your_wireguard_address_here' "$ENV_FILE"; then
+        if [[ -z "$wg_addresses" ]]; then
+            fail "WIREGUARD_ADDRESSES is empty in .env"
+        elif [[ "$wg_addresses" == "your_wireguard_address_here" ]]; then
             fail "WIREGUARD_ADDRESSES is still a placeholder in .env"
         else
             ok "WIREGUARD_ADDRESSES appears set"
         fi
+    else
+        fail "VPN_PROVIDER must be protonvpn or pia (current: $VPN_PROVIDER)"
     fi
 else
     fail ".env is missing (run: bash scripts/setup.sh)"
