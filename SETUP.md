@@ -314,6 +314,8 @@ The script will:
 - Configure the download client (qBittorrent) with the right settings
 - Set up all the search indexers (where to find movies/shows)
 - Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
+- Apply valid Radarr/Sonarr/Prowlarr authentication defaults (`forms` + local bypass) to avoid first-run auth prompts
+- Ensure Arr download category folders exist and validate Prowlarr indexer priorities for current API rules
 - Ask you to sign in to Seerr with Plex or Jellyfin (one browser step)
 
 At the end it will print your qBittorrent password and save credentials/API keys to `<MEDIA_DIR>/state/first-run-credentials.txt` (mode `600`, default path `~/Media/state/first-run-credentials.txt`).
@@ -383,6 +385,18 @@ docker compose restart gluetun
 Open qBittorrent (http://localhost:8080) and check if torrents are active. If everything shows "stalled", the VPN tunnel may be down. Restart gluetun:
 ```bash
 docker compose restart gluetun
+```
+
+**Radarr, Sonarr, or Prowlarr shows an Authentication Required setup prompt:**
+Re-run the configurator to re-apply the default Arr/Prowlarr auth policy:
+```bash
+bash scripts/configure.sh --non-interactive
+```
+
+**Radarr shows “No indexers available” or missing `/downloads/complete/radarr`:**
+Re-run the configurator to re-create required download category folders and re-apply indexers:
+```bash
+bash scripts/configure.sh --non-interactive
 ```
 
 **Plex doesn't see new movies:**

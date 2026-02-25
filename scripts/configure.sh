@@ -79,10 +79,17 @@ MEDIA_SERVER="${MEDIA_SERVER:-$(read_env_value MEDIA_SERVER)}"
 MEDIA_SERVER="$(strip_wrapping_quotes "$MEDIA_SERVER")"
 MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 
+# Ensure shared download category paths exist for Arr health checks and imports.
+mkdir -p "$MEDIA_DIR"/Downloads/complete/{radarr,tv-sonarr}
+
 CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
 EXISTING_QB_PASSWORD=""
+EXISTING_ARR_USERNAME=""
+EXISTING_ARR_PASSWORD=""
 if [[ -f "$CREDS_FILE" ]]; then
     EXISTING_QB_PASSWORD=$(sed -n 's/^qBittorrent Password: //p' "$CREDS_FILE" | head -1 || true)
+    EXISTING_ARR_USERNAME=$(sed -n 's/^Arr Username: //p' "$CREDS_FILE" | head -1 || true)
+    EXISTING_ARR_PASSWORD=$(sed -n 's/^Arr Password: //p' "$CREDS_FILE" | head -1 || true)
 fi
 
 # Keep a stable qBittorrent password across reruns when available.
@@ -90,6 +97,18 @@ if [[ -n "$EXISTING_QB_PASSWORD" ]]; then
     QB_PASSWORD="$EXISTING_QB_PASSWORD"
 else
     QB_PASSWORD="media$(openssl rand -hex 12)"
+fi
+
+if [[ -n "$EXISTING_ARR_USERNAME" ]]; then
+    ARR_USERNAME="$EXISTING_ARR_USERNAME"
+else
+    ARR_USERNAME="admin"
+fi
+
+if [[ -n "$EXISTING_ARR_PASSWORD" ]]; then
+    ARR_PASSWORD="$EXISTING_ARR_PASSWORD"
+else
+    ARR_PASSWORD="arr$(openssl rand -hex 16)"
 fi
 
 # ============================================================
@@ -107,6 +126,8 @@ save_credentials() {
 # Generated: $(date '+%Y-%m-%d %H:%M:%S')
 qBittorrent Username: admin
 qBittorrent Password: $QB_PASSWORD
+Arr Username: $ARR_USERNAME
+Arr Password: $ARR_PASSWORD
 Radarr API Key: $RADARR_KEY
 Sonarr API Key: $SONARR_KEY
 Prowlarr API Key: $PROWLARR_KEY
@@ -227,6 +248,59 @@ api_post_form() {
     sed -n '1,2p' "$body_file" >&2 || true
     rm -f "$body_file"
     return 1
+}
+
+configure_service_host_auth() {
+    local service_name="$1"
+    local base_url="$2"
+    local api_key="$3"
+    local api_version="$4"
+    local host_config auth_method auth_required update_payload
+    local escaped_username escaped_password
+
+    host_config=$(curl -fsS "$base_url/api/$api_version/config/host" -H "X-Api-Key: $api_key" 2>/dev/null || true)
+    if [[ -z "$host_config" ]]; then
+        warn "$service_name authentication check skipped (could not read host config)"
+        return 0
+    fi
+
+    auth_method=$(printf '%s' "$host_config" | tr -d '\n' | sed -n 's/.*"authenticationMethod":[[:space:]]*"\([^"]*\)".*/\1/p')
+    auth_required=$(printf '%s' "$host_config" | tr -d '\n' | sed -n 's/.*"authenticationRequired":[[:space:]]*"\([^"]*\)".*/\1/p')
+
+    if [[ "$auth_method" == "none" && "$auth_required" == "enabled" ]]; then
+        escaped_username="${ARR_USERNAME//\\/\\\\}"
+        escaped_username="${escaped_username//&/\\&}"
+        escaped_username="${escaped_username//|/\\|}"
+        escaped_password="${ARR_PASSWORD//\\/\\\\}"
+        escaped_password="${escaped_password//&/\\&}"
+        escaped_password="${escaped_password//|/\\|}"
+
+        update_payload=$(printf '%s' "$host_config" | tr -d '\n')
+        update_payload=$(printf '%s' "$update_payload" | sed -E 's|"authenticationMethod"[[:space:]]*:[[:space:]]*"[^"]*"|"authenticationMethod":"forms"|')
+        update_payload=$(printf '%s' "$update_payload" | sed -E 's|"authenticationRequired"[[:space:]]*:[[:space:]]*"[^"]*"|"authenticationRequired":"disabledForLocalAddresses"|')
+        update_payload=$(printf '%s' "$update_payload" | sed -E "s|\"username\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"username\":\"$escaped_username\"|")
+        update_payload=$(printf '%s' "$update_payload" | sed -E "s|\"password\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"password\":\"$escaped_password\"|")
+        update_payload=$(printf '%s' "$update_payload" | sed -E "s|\"passwordConfirmation\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"passwordConfirmation\":\"$escaped_password\"|")
+
+        if api_put_json "$service_name authentication configured (forms + local bypass)" \
+            "$base_url/api/$api_version/config/host" \
+            "$api_key" \
+            "$update_payload"; then
+            return 0
+        fi
+        warn "$service_name authentication auto-config failed; configure manually in UI if prompted"
+        return 0
+    fi
+
+    log "$service_name authentication already valid ($auth_method/$auth_required)"
+}
+
+configure_arr_host_auth() {
+    configure_service_host_auth "$1" "$2" "$3" "v3"
+}
+
+configure_prowlarr_host_auth() {
+    configure_service_host_auth "$1" "$2" "$3" "v1"
 }
 
 wait_for_service() {
@@ -390,7 +464,16 @@ fi
 if [[ "$QB_AUTHENTICATED" == true ]] || [[ ! -f "$CREDS_FILE" ]]; then
     save_credentials
 else
-    warn "Skipping credential file update because qBittorrent authentication failed"
+    if ! grep -q '^Arr Username: ' "$CREDS_FILE" || ! grep -q '^Arr Password: ' "$CREDS_FILE"; then
+        {
+            echo "Arr Username: $ARR_USERNAME"
+            echo "Arr Password: $ARR_PASSWORD"
+        } >> "$CREDS_FILE"
+        chmod 600 "$CREDS_FILE"
+        log "Arr credentials added to existing credentials file"
+    else
+        warn "Skipping credential file update because qBittorrent authentication failed"
+    fi
 fi
 
 echo ""
@@ -401,6 +484,9 @@ echo ""
 
 echo -e "${CYAN}[4/6] Configuring Radarr & Sonarr...${NC}"
 echo ""
+
+configure_arr_host_auth "Radarr" "http://localhost:7878" "$RADARR_KEY"
+configure_arr_host_auth "Sonarr" "http://localhost:8989" "$SONARR_KEY"
 
 # --- Radarr: Add root folder ---
 api_post_json "Radarr root folder set to /movies" \
@@ -485,6 +571,8 @@ echo ""
 echo -e "${CYAN}[5/6] Configuring Prowlarr...${NC}"
 echo ""
 
+configure_prowlarr_host_auth "Prowlarr" "http://localhost:9696" "$PROWLARR_KEY"
+
 # --- Create FlareSolverr tag (ID will be 1) ---
 FLARE_TAG_ID=$(curl -fsS "http://localhost:9696/api/v1/tag" \
     -H "X-Api-Key: $PROWLARR_KEY" \
@@ -510,12 +598,62 @@ api_post_json "FlareSolverr proxy added" \
 
 # --- Add indexers ---
 
+prowlarr_indexer_exists() {
+    local name="$1"
+    if curl -fsS "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_KEY" 2>/dev/null | tr -d '\n' | grep -q "\"name\":\"$name\""; then
+        return 0
+    fi
+    return 1
+}
+
+ensure_indexer_has_tag() {
+    local name="$1"
+    local tag_id="$2"
+    local indexer_json indexer_id updated_json
+
+    if [[ -z "$tag_id" ]]; then
+        return 0
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not found; skipping FlareSolverr tag enforcement for $name"
+        return 0
+    fi
+
+    indexer_json=$(curl -fsS "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_KEY" 2>/dev/null \
+        | jq -c --arg name "$name" '.[] | select(.name == $name)' | head -1 || true)
+
+    if [[ -z "$indexer_json" ]]; then
+        return 0
+    fi
+
+    if printf '%s' "$indexer_json" | jq -e --argjson tag "$tag_id" '(.tags // []) | index($tag) != null' >/dev/null; then
+        log "Indexer already tagged with FlareSolverr: $name"
+        return 0
+    fi
+
+    indexer_id=$(printf '%s' "$indexer_json" | jq -r '.id')
+    updated_json=$(printf '%s' "$indexer_json" | jq -c --argjson tag "$tag_id" '.tags = ((.tags // []) + [$tag] | unique)')
+
+    if ! api_put_json "Indexer tag updated: $name -> FlareSolverr" \
+        "http://localhost:9696/api/v1/indexer/$indexer_id" \
+        "$PROWLARR_KEY" \
+        "$updated_json"; then
+        warn "Could not enforce FlareSolverr tag for $name"
+    fi
+}
+
 # Helper to add a Prowlarr indexer
 add_indexer() {
     local name="$1"
     local implementation="$2"
     local base_url="$3"
     local tags="$4"
+
+    if prowlarr_indexer_exists "$name"; then
+        warn "Indexer already configured: $name"
+        return 0
+    fi
 
     if ! api_post_json "Indexer added: $name" \
         "http://localhost:9696/api/v1/indexer" \
@@ -526,6 +664,7 @@ add_indexer() {
             \"configContract\": \"${implementation}Settings\",
             \"protocol\": \"torrent\",
             \"enable\": true,
+            \"priority\": 25,
             \"appProfileId\": 1,
             \"fields\": [
                 {\"name\": \"baseUrl\", \"value\": \"$base_url\"},
@@ -545,21 +684,25 @@ add_cardigann_indexer() {
     local base_url="$3"
     local tags="$4"
 
+    if prowlarr_indexer_exists "$name"; then
+        warn "Indexer already configured: $name"
+        return 0
+    fi
+
     if ! api_post_json "Indexer added: $name" \
         "http://localhost:9696/api/v1/indexer" \
         "$PROWLARR_KEY" \
         "{
             \"name\": \"$name\",
-            \"definitionName\": \"$definition_name\",
             \"implementation\": \"Cardigann\",
             \"configContract\": \"CardigannSettings\",
             \"protocol\": \"torrent\",
             \"enable\": true,
+            \"priority\": 25,
             \"appProfileId\": 1,
             \"fields\": [
-                {\"name\": \"baseUrl\", \"value\": \"$base_url\"},
-                {\"name\": \"sortRequestLimit\", \"value\": 100},
-                {\"name\": \"multiLanguages\", \"value\": []}
+                {\"name\": \"definitionFile\", \"value\": \"$definition_name\"},
+                {\"name\": \"baseUrl\", \"value\": \"$base_url\"}
             ],
             \"tags\": [$tags]
         }"; then
@@ -569,8 +712,12 @@ add_cardigann_indexer() {
 
 add_cardigann_indexer "YTS" "yts" "https://yts.mx" ""
 add_cardigann_indexer "1337x" "1337x" "https://1337x.to" "$FLARE_TAG_ID"
-add_cardigann_indexer "EZTV" "eztv" "https://eztvx.to" ""
-add_cardigann_indexer "TorrentGalaxy" "torrentgalaxy" "https://torrentgalaxy.to" ""
+add_cardigann_indexer "EZTV" "eztv" "https://eztvx.to" "$FLARE_TAG_ID"
+add_cardigann_indexer "TorrentGalaxy" "torrentgalaxyclone" "https://torrentgalaxy.to" ""
+
+# Ensure existing installs keep FlareSolverr tags for Cloudflare-prone indexers.
+ensure_indexer_has_tag "1337x" "$FLARE_TAG_ID"
+ensure_indexer_has_tag "EZTV" "$FLARE_TAG_ID"
 
 # --- Connect Radarr as app ---
 api_post_json "Prowlarr connected to Radarr" \
@@ -609,11 +756,17 @@ api_post_json "Prowlarr connected to Sonarr" \
     }"
 
 # --- Trigger Prowlarr to sync indexers to apps ---
-if ! api_post_json "Indexer sync triggered" \
-    "http://localhost:9696/api/v1/command" \
-    "$PROWLARR_KEY" \
-    '{"name": "SyncIndexers"}'; then
-    warn "Prowlarr SyncIndexers command skipped due API validation error"
+INDEXERS_JSON=$(curl -fsS "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_KEY" 2>/dev/null || true)
+ENABLED_INDEXER_COUNT=$(printf '%s' "$INDEXERS_JSON" | tr -d '\n' | { grep -o '"enable":[[:space:]]*true' || true; } | wc -l | tr -d ' ')
+if [[ "${ENABLED_INDEXER_COUNT:-0}" -gt 0 ]]; then
+    if ! api_post_json "Indexer sync triggered" \
+        "http://localhost:9696/api/v1/command" \
+        "$PROWLARR_KEY" \
+        '{"name": "ApplicationIndexerSync"}'; then
+        warn "Prowlarr ApplicationIndexerSync command skipped due API validation error"
+    fi
+else
+    warn "No enabled Prowlarr indexers found; skipping ApplicationIndexerSync command"
 fi
 
 echo ""
@@ -783,6 +936,7 @@ echo "  Radarr (movie admin):      http://localhost:7878"
 echo "  Sonarr (TV admin):         http://localhost:8989"
 echo "  Prowlarr (indexer admin):  http://localhost:9696"
 echo "  Bazarr (subtitles):        http://localhost:6767"
+echo "  Arr UI credentials:        saved in $CREDS_FILE"
 echo ""
 echo -e "  ${YELLOW}Save your qBittorrent password:${NC} $QB_PASSWORD"
 echo "  Saved credentials:         $CREDS_FILE"

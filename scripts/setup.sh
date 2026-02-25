@@ -241,6 +241,7 @@ USER_PGID=$(id -g)
 # Create folder structure
 echo "Creating folders..."
 mkdir -p "$MEDIA_DIR"/{Downloads,Movies,"TV Shows",logs,state}
+mkdir -p "$MEDIA_DIR"/Downloads/complete/{radarr,tv-sonarr}
 mkdir -p "$CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"/{qbittorrent,prowlarr,sonarr,radarr,bazarr,seerr,jellyfin}
 echo -e "  ${GREEN}Done${NC}"

@@ -149,8 +149,10 @@ docker compose up -d         # start everything
 # if MEDIA_SERVER=jellyfin in .env:
 docker compose --profile jellyfin up -d
 docker compose --profile autoupdate up -d watchtower  # optional auto-updates
-bash scripts/configure.sh     # auto-configure all services
+bash scripts/configure.sh     # auto-configure all services + Radarr/Sonarr/Prowlarr auth defaults
 ```
+
+`scripts/configure.sh` also ensures Arr download category folders exist (`/downloads/complete/radarr` and `/downloads/complete/tv-sonarr`) and applies Prowlarr indexer payloads with valid priorities for current API validation.
 
 ## Full Setup Guide
 
@@ -165,7 +167,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 |--------|---------|
 | `scripts/setup.sh` | Creates folder structure, migrates legacy config to local disk, and generates `.env` |
 | `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports) |
-| `scripts/configure.sh` | Auto-configures all service connections |
+| `scripts/configure.sh` | Auto-configures service connections (including Radarr/Sonarr/Prowlarr auth defaults) |
 | `scripts/health-check.sh` | Checks if everything is running correctly |
 | `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
