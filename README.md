@@ -169,7 +169,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports) |
 | `scripts/configure.sh` | Auto-configures service connections (including Radarr/Sonarr/Prowlarr auth defaults) |
 | `scripts/health-check.sh` | Checks if everything is running correctly |
-| `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |
+| `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |

@@ -38,13 +38,19 @@ check_service() {
     local expected="${3:-200}"
 
     status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)
-    if [[ "$status" == "$expected" || "$status" == "302" || "$status" == "301" ]]; then
+    if [[ "$status" == "$expected" || "$status" == "301" || "$status" == "302" || "$status" == "307" || "$status" == "308" ]]; then
         echo -e "  ${GREEN}OK${NC}  $name"
         ((PASS++))
     else
         echo -e "  ${RED}FAIL${NC}  $name (got HTTP $status)"
         ((FAIL++))
     fi
+}
+
+get_netns_id() {
+    local name="$1"
+    docker exec "$name" sh -lc 'readlink /proc/1/ns/net 2>/dev/null || true' 2>/dev/null \
+        | awk -F'[][]' '/^net:\[[0-9]+\]$/ {print $2; exit}'
 }
 
 RUNTIME=$(detect_installed_runtime)
@@ -121,6 +127,21 @@ elif [[ -z "$vpn_iface" ]]; then
 else
     echo -e "  ${RED}FAIL${NC}  VPN health is unhealthy"
     ((FAIL++))
+fi
+
+gluetun_netns="$(get_netns_id gluetun)"
+qbittorrent_netns="$(get_netns_id qbittorrent)"
+if [[ -n "$gluetun_netns" && -n "$qbittorrent_netns" ]]; then
+    if [[ "$gluetun_netns" == "$qbittorrent_netns" ]]; then
+        echo -e "  ${GREEN}OK${NC}  qBittorrent shares gluetun network namespace ($gluetun_netns)"
+        ((PASS++))
+    else
+        echo -e "  ${RED}FAIL${NC}  qBittorrent network namespace drift (gluetun=$gluetun_netns, qbittorrent=$qbittorrent_netns)"
+        echo "       Run: docker restart qbittorrent"
+        ((FAIL++))
+    fi
+else
+    echo -e "  ${YELLOW}SKIP${NC}  Could not verify qBittorrent/gluetun namespace IDs"
 fi
 
 echo ""

@@ -441,6 +441,7 @@ else
     api_post_form "Password set and preferences configured" "http://localhost:8080/api/v2/app/setPreferences" "SID=$QB_COOKIE" \
         --data-urlencode "json={
             \"web_ui_password\": \"$QB_PASSWORD\",
+            \"bypass_local_auth\": true,
             \"max_ratio\": 0,
             \"max_seeding_time\": 0,
             \"max_ratio_act\": 0,

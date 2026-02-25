@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installs the auto-heal launchd job (runs hourly).
+# Installs the auto-heal launchd job (runs every 5 minutes).
 # Usage: bash scripts/install-auto-heal.sh [--help]
 
 set -euo pipefail
@@ -14,7 +14,7 @@ source "$SCRIPT_DIR/lib/media-path.sh"
 
 MEDIA_DIR="$(resolve_media_dir "$PROJECT_DIR")"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
-LOG_DIR="$MEDIA_DIR/logs/launchd"
+LOG_DIR="$HOME/Library/Logs/media-stack/launchd"
 PLIST_NAME="com.media-stack.auto-heal"
 PLIST_PATH="$LAUNCH_DIR/$PLIST_NAME.plist"
 
@@ -22,7 +22,7 @@ usage() {
     cat <<EOF
 Usage: bash scripts/install-auto-heal.sh
 
-Installs the hourly auto-heal launchd job.
+Installs the auto-heal launchd job (every 5 minutes + on login).
 
 Options:
   --help    Show this help message
@@ -56,8 +56,15 @@ cat > "$PLIST_PATH" <<EOF
         <string>/bin/bash</string>
         <string>$SCRIPT_DIR/auto-heal.sh</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>$PROJECT_DIR</string>
     <key>StartInterval</key>
-    <integer>3600</integer>
+    <integer>300</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
@@ -71,7 +78,8 @@ EOF
 launchctl unload "$PLIST_PATH" 2>/dev/null || true
 launchctl load "$PLIST_PATH"
 
-echo -e "${GREEN}Auto-heal installed.${NC} Runs every hour + on login."
-echo "Logs: $MEDIA_DIR/logs/auto-heal.log and $MEDIA_DIR/logs/launchd/"
+echo -e "${GREEN}Auto-heal installed.${NC} Runs every 5 minutes + on login."
+echo "Auto-heal logs: $MEDIA_DIR/logs/auto-heal.log (when media mount is ready)"
+echo "Fallback logs + launchd logs: $HOME/Library/Logs/media-stack/"
 echo ""
 echo "To uninstall: launchctl unload $PLIST_PATH && rm $PLIST_PATH"

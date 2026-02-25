@@ -323,13 +323,14 @@ At the end it will print your qBittorrent password and save credentials/API keys
 ---
 ## Step 9: Install Auto-Healer (Optional but Recommended)
 
-This installs a background job that checks your stack every hour. If the VPN goes down or a container stops, it automatically restarts it. Set it and forget it.
+This installs a background job that checks your stack every 5 minutes. It recovers common sleep/wake issues too (VPN unhealthy, dead WebUIs, or missing bind mounts like `/tv`/`/downloads`).
 
 ```bash
 bash scripts/install-auto-heal.sh
 ```
 
-Logs go to `<MEDIA_DIR>/logs/auto-heal.log` (default `~/Media/logs/auto-heal.log`) if you ever want to check what it's been doing.
+When your media mount is available, logs go to `<MEDIA_DIR>/logs/auto-heal.log` (default `~/Media/logs/auto-heal.log`).
+If the media mount is unavailable, fallback logs are written to `~/Library/Logs/media-stack/auto-heal.log`.
 
 To remove it later:
 ```bash
