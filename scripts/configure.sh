@@ -43,13 +43,35 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Load .env
-if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
+# Load only required keys from .env (do not source it: values can contain spaces)
+ENV_FILE="$SCRIPT_DIR/.env"
+
+if [[ ! -f "$ENV_FILE" ]]; then
     echo -e "${RED}Error:${NC} .env file not found. Run setup.sh first."
     exit 1
 fi
-source "$SCRIPT_DIR/.env"
 
+read_env_value() {
+    local key="$1"
+    sed -n "s/^${key}=//p" "$ENV_FILE" | head -1
+}
+
+strip_wrapping_quotes() {
+    local value="$1"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    printf '%s\n' "$value"
+}
+
+MEDIA_DIR="${MEDIA_DIR:-$(read_env_value MEDIA_DIR)}"
+MEDIA_DIR="$(strip_wrapping_quotes "$MEDIA_DIR")"
+MEDIA_DIR="${MEDIA_DIR:-$HOME/Media}"
+MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
+
+MEDIA_SERVER="${MEDIA_SERVER:-$(read_env_value MEDIA_SERVER)}"
+MEDIA_SERVER="$(strip_wrapping_quotes "$MEDIA_SERVER")"
 MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 
 # Permanent qBittorrent password (generated randomly)
