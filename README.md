@@ -76,7 +76,7 @@ curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/
 Optional flags when running from a local clone:
 
 ```bash
-bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack --non-interactive
+bash bootstrap.sh --media-dir /Volumes/T9/Media --config-dir ~/home-media-stack/config --install-dir ~/mac-media-stack --non-interactive
 bash bootstrap.sh --jellyfin  # use Jellyfin instead of Plex
 bash bootstrap.sh --pia       # use PIA instead of ProtonVPN
 ```
@@ -117,6 +117,21 @@ bash scripts/update-to-latest-release.sh
 
 `VPN_PORT_FORWARDING_PROVIDER` controls which provider-specific forwarding code is used. Leave it empty to use the current VPN provider automatically. If you set it explicitly for PIA, use exactly `private internet access`. Do not use `pia` for this field.
 
+### Path Layout (Recommended)
+
+- Keep media content on your media drive/share with `MEDIA_DIR` (for `Movies`, `TV Shows`, `Downloads`).
+- Keep app databases/configs on local disk with `CONFIG_DIR` (for Radarr/Sonarr/qBittorrent/Seerr/etc).
+- Default local config path is `~/home-media-stack/config`.
+
+Example:
+
+```env
+MEDIA_DIR=/Volumes/media
+CONFIG_DIR=/Users/YOURUSERNAME/home-media-stack/config
+```
+
+Using SMB/NFS for `CONFIG_DIR` can cause SQLite `database is locked` errors.
+
 ## Manual Quick Start
 
 If you prefer to run each step yourself:
@@ -126,6 +141,8 @@ git clone https://github.com/liamvibecodes/mac-media-stack.git
 cd mac-media-stack
 bash scripts/setup.sh        # creates folders, generates .env (ProtonVPN defaults)
 # or: bash scripts/setup.sh --pia
+# or with explicit paths:
+# bash scripts/setup.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
 # edit .env and add your VPN credentials
 bash scripts/doctor.sh       # preflight validation before first boot
 docker compose up -d         # start everything
@@ -146,7 +163,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/setup.sh` | Creates folder structure and .env file |
+| `scripts/setup.sh` | Creates folder structure, migrates legacy config to local disk, and generates `.env` |
 | `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports) |
 | `scripts/configure.sh` | Auto-configures all service connections |
 | `scripts/health-check.sh` | Checks if everything is running correctly |
@@ -154,6 +171,8 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |
+
+Local path/runbook reference is generated at `~/home-media-stack/README.md` each time `scripts/setup.sh` runs.
 
 ## What It Looks Like
 

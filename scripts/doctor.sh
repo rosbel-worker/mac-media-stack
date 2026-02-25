@@ -1,6 +1,6 @@
 #!/bin/bash
 # Media Stack preflight checks (non-destructive)
-# Usage: bash scripts/doctor.sh [--media-dir DIR] [--help]
+# Usage: bash scripts/doctor.sh [--media-dir DIR] [--config-dir DIR] [--help]
 
 set -euo pipefail
 
@@ -13,7 +13,9 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 MEDIA_DIR="$HOME/Media"
+CONFIG_DIR="$HOME/home-media-stack/config"
 MEDIA_DIR_SET_BY_FLAG=false
+CONFIG_DIR_SET_BY_FLAG=false
 
 PASS=0
 WARN=0
@@ -26,7 +28,8 @@ Usage: bash scripts/doctor.sh [OPTIONS]
 Run preflight checks before first startup.
 
 Options:
-  --media-dir DIR   Media root path (default: from .env, otherwise ~/Media)
+  --media-dir DIR    Media root path (default: from .env, otherwise ~/Media)
+  --config-dir DIR   Local app config path (default: from .env, otherwise ~/home-media-stack/config)
   --help            Show this help message
 EOF
 }
@@ -40,6 +43,15 @@ while [[ $# -gt 0 ]]; do
             fi
             MEDIA_DIR="$2"
             MEDIA_DIR_SET_BY_FLAG=true
+            shift 2
+            ;;
+        --config-dir)
+            if [[ $# -lt 2 || "$2" == --* ]]; then
+                echo "Missing value for --config-dir"
+                exit 1
+            fi
+            CONFIG_DIR="$2"
+            CONFIG_DIR_SET_BY_FLAG=true
             shift 2
             ;;
         --help|-h)
@@ -60,7 +72,27 @@ if [[ "$MEDIA_DIR_SET_BY_FLAG" != true ]] && [[ -f "$ENV_FILE" ]]; then
         MEDIA_DIR="$env_media"
     fi
 fi
+
+if [[ "$CONFIG_DIR_SET_BY_FLAG" != true ]] && [[ -f "$ENV_FILE" ]]; then
+    env_config=$(sed -n 's/^CONFIG_DIR=//p' "$ENV_FILE" | head -1)
+    if [[ -n "$env_config" ]]; then
+        CONFIG_DIR="$env_config"
+    fi
+fi
+
+strip_wrapping_quotes() {
+    local value="$1"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    printf '%s\n' "$value"
+}
+
+MEDIA_DIR="$(strip_wrapping_quotes "$MEDIA_DIR")"
+CONFIG_DIR="$(strip_wrapping_quotes "$CONFIG_DIR")"
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
+CONFIG_DIR="${CONFIG_DIR/#\~/$HOME}"
 
 # Load media server choice
 MEDIA_SERVER="plex"
@@ -96,6 +128,7 @@ echo "=============================="
 echo ""
 echo -e "  ${CYAN}Info${NC}  Project: $SCRIPT_DIR"
 echo -e "  ${CYAN}Info${NC}  Media dir: $MEDIA_DIR"
+echo -e "  ${CYAN}Info${NC}  Config dir: $CONFIG_DIR"
 echo ""
 
 # Core tools
@@ -187,13 +220,28 @@ else
 fi
 
 # Media directories
-for dir in "$MEDIA_DIR" "$MEDIA_DIR/Downloads" "$MEDIA_DIR/Movies" "$MEDIA_DIR/TV Shows" "$MEDIA_DIR/config"; do
+for dir in "$MEDIA_DIR" "$MEDIA_DIR/Downloads" "$MEDIA_DIR/Movies" "$MEDIA_DIR/TV Shows"; do
     if [[ -d "$dir" ]]; then
         ok "Directory exists: $dir"
     else
         warn "Directory missing: $dir"
     fi
 done
+
+if [[ -d "$CONFIG_DIR" ]]; then
+    ok "Directory exists: $CONFIG_DIR"
+else
+    warn "Directory missing: $CONFIG_DIR"
+fi
+
+config_check_target="$CONFIG_DIR"
+if [[ ! -e "$config_check_target" ]]; then
+    config_check_target="$(dirname "$CONFIG_DIR")"
+fi
+config_fs_type="$(stat -f %T "$config_check_target" 2>/dev/null || true)"
+if [[ "$config_fs_type" == "smbfs" || "$config_fs_type" == "nfs" ]]; then
+    warn "CONFIG_DIR is on $config_fs_type (use local disk to avoid SQLite lock errors)"
+fi
 
 # Compose render
 if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then

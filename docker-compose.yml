@@ -31,7 +31,7 @@ services:
       - TZ=${TIMEZONE:-America/New_York}
       - WEBUI_PORT=8080
     volumes:
-      - ${MEDIA_DIR}/config/qbittorrent:/config
+      - ${CONFIG_DIR}/qbittorrent:/config
       - ${MEDIA_DIR}/Downloads:/downloads
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/TV Shows:/tv
@@ -50,7 +50,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/prowlarr:/config
+      - ${CONFIG_DIR}/prowlarr:/config
     ports:
       - 127.0.0.1:9696:9696
     healthcheck:
@@ -68,7 +68,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/sonarr:/config
+      - ${CONFIG_DIR}/sonarr:/config
       - ${MEDIA_DIR}/TV Shows:/tv
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
@@ -88,7 +88,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/radarr:/config
+      - ${CONFIG_DIR}/radarr:/config
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
@@ -108,7 +108,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/bazarr:/config
+      - ${CONFIG_DIR}/bazarr:/config
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/TV Shows:/tv
     ports:
@@ -138,11 +138,11 @@ services:
     environment:
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/seerr:/app/config
+      - ${CONFIG_DIR}/seerr:/app/config
     ports:
       - ${SEERR_BIND_IP:-127.0.0.1}:5055:5055
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5055/api/v1/status || exit 1"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5055/api/v1/status').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -157,7 +157,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/jellyfin:/config
+      - ${CONFIG_DIR}/jellyfin:/config
       - ${MEDIA_DIR}/Movies:/data/movies
       - ${MEDIA_DIR}/TV Shows:/data/tvshows
     ports:

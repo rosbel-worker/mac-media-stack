@@ -1,28 +1,40 @@
 #!/bin/bash
-# Shared MEDIA_DIR resolver.
-# Priority: explicit MEDIA_DIR env var -> .env MEDIA_DIR -> ~/Media
+# Shared path resolvers.
+# Priority: explicit env var -> .env value -> default.
 
-resolve_media_dir() {
-    local project_dir="${1:-}"
-    local env_file media_dir
+resolve_path_from_env_file() {
+    local key="$1"
+    local default_value="$2"
+    local project_dir="${3:-}"
+    local env_file value
 
     if [[ -z "$project_dir" ]]; then
         project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     fi
 
     env_file="$project_dir/.env"
-    media_dir="${MEDIA_DIR:-}"
+    value="${!key:-}"
 
-    if [[ -z "$media_dir" && -f "$env_file" ]]; then
-        media_dir="$(sed -n 's/^MEDIA_DIR=//p' "$env_file" | head -1)"
+    if [[ -z "$value" && -f "$env_file" ]]; then
+        value="$(sed -n "s/^${key}=//p" "$env_file" | head -1)"
     fi
 
-    media_dir="${media_dir%\"}"
-    media_dir="${media_dir#\"}"
-    media_dir="${media_dir%\'}"
-    media_dir="${media_dir#\'}"
-    media_dir="${media_dir:-$HOME/Media}"
-    media_dir="${media_dir/#\~/$HOME}"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    value="${value:-$default_value}"
+    value="${value/#\~/$HOME}"
 
-    printf '%s\n' "$media_dir"
+    printf '%s\n' "$value"
+}
+
+resolve_media_dir() {
+    local project_dir="${1:-}"
+    resolve_path_from_env_file "MEDIA_DIR" "$HOME/Media" "$project_dir"
+}
+
+resolve_config_dir() {
+    local project_dir="${1:-}"
+    resolve_path_from_env_file "CONFIG_DIR" "$HOME/home-media-stack/config" "$project_dir"
 }

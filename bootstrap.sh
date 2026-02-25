@@ -12,10 +12,13 @@ NC='\033[0m'
 
 BOOTSTRAP_DIR="$(cd "$(dirname "$0")" && pwd)"
 MEDIA_DIR="$HOME/Media"
+CONFIG_DIR="$HOME/home-media-stack/config"
 INSTALL_DIR="$HOME/mac-media-stack"
 NON_INTERACTIVE=false
 MEDIA_SERVER=plex
 VPN_PROVIDER=protonvpn
+MEDIA_DIR_SET_BY_FLAG=false
+CONFIG_DIR_SET_BY_FLAG=false
 
 usage() {
     cat <<EOF
@@ -23,6 +26,7 @@ Usage: bash bootstrap.sh [OPTIONS]
 
 Options:
   --media-dir DIR       Media root path (default: ~/Media)
+  --config-dir DIR      Local app config path (default: ~/home-media-stack/config)
   --install-dir DIR     Repo install directory (default: ~/mac-media-stack)
   --jellyfin            Use Jellyfin instead of Plex as your media server
   --pia                 Use PIA instead of ProtonVPN as your VPN provider
@@ -32,6 +36,7 @@ Options:
 Examples:
   bash bootstrap.sh
   bash bootstrap.sh --media-dir /Volumes/T9/Media
+  bash bootstrap.sh --config-dir ~/home-media-stack/config
   bash bootstrap.sh --media-dir /Volumes/T9/Media --non-interactive
   bash bootstrap.sh --jellyfin
   bash bootstrap.sh --pia
@@ -46,6 +51,16 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             MEDIA_DIR="$2"
+            MEDIA_DIR_SET_BY_FLAG=true
+            shift 2
+            ;;
+        --config-dir)
+            if [[ $# -lt 2 || "$2" == --* ]]; then
+                echo "Missing value for --config-dir"
+                exit 1
+            fi
+            CONFIG_DIR="$2"
+            CONFIG_DIR_SET_BY_FLAG=true
             shift 2
             ;;
         --install-dir)
@@ -81,7 +96,33 @@ while [[ $# -gt 0 ]]; do
 done
 
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
+CONFIG_DIR="${CONFIG_DIR/#\~/$HOME}"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+
+strip_wrapping_quotes() {
+    local value="$1"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    printf '%s\n' "$value"
+}
+
+if [[ "$MEDIA_DIR_SET_BY_FLAG" != true ]] && [[ -f "$INSTALL_DIR/.env" ]]; then
+    env_media_dir="$(sed -n 's/^MEDIA_DIR=//p' "$INSTALL_DIR/.env" | head -1)"
+    if [[ -n "$env_media_dir" ]]; then
+        MEDIA_DIR="$(strip_wrapping_quotes "$env_media_dir")"
+        MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
+    fi
+fi
+
+if [[ "$CONFIG_DIR_SET_BY_FLAG" != true ]] && [[ -f "$INSTALL_DIR/.env" ]]; then
+    env_config_dir="$(sed -n 's/^CONFIG_DIR=//p' "$INSTALL_DIR/.env" | head -1)"
+    if [[ -n "$env_config_dir" ]]; then
+        CONFIG_DIR="$(strip_wrapping_quotes "$env_config_dir")"
+        CONFIG_DIR="${CONFIG_DIR/#\~/$HOME}"
+    fi
+fi
 
 echo ""
 echo "=============================="
@@ -190,6 +231,7 @@ fi
 echo ""
 echo "Install dir: $INSTALL_DIR"
 echo "Media dir:   $MEDIA_DIR"
+echo "Config dir:  $CONFIG_DIR"
 echo ""
 
 # Clone
@@ -211,7 +253,7 @@ echo ""
 
 # Setup
 echo -e "${CYAN}Running setup...${NC}"
-SETUP_ARGS=(--media-dir "$MEDIA_DIR")
+SETUP_ARGS=(--media-dir "$MEDIA_DIR" --config-dir "$CONFIG_DIR")
 if [[ "$VPN_PROVIDER" == "pia" ]]; then
     SETUP_ARGS+=(--pia)
 fi
@@ -224,8 +266,13 @@ else
     echo "" >> .env
     echo "MEDIA_SERVER=$MEDIA_SERVER" >> .env
 fi
+if grep -q '^CONFIG_DIR=' .env 2>/dev/null; then
+    sed -i '' "s|^CONFIG_DIR=.*|CONFIG_DIR=$CONFIG_DIR|" .env
+else
+    echo "CONFIG_DIR=$CONFIG_DIR" >> .env
+fi
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    mkdir -p "$MEDIA_DIR/config/jellyfin"
+    mkdir -p "$CONFIG_DIR/jellyfin"
 fi
 
 # Write VPN provider choice + connection settings to .env
@@ -323,7 +370,7 @@ echo ""
 
 # Preflight
 echo -e "${CYAN}Running preflight checks...${NC}"
-if ! bash scripts/doctor.sh --media-dir "$MEDIA_DIR"; then
+if ! bash scripts/doctor.sh --media-dir "$MEDIA_DIR" --config-dir "$CONFIG_DIR"; then
     echo ""
     echo -e "${RED}Preflight checks failed.${NC} Fix the FAIL items above, then re-run bootstrap."
     exit 1

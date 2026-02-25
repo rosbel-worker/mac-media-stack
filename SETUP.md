@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/
 Run it locally with custom paths:
 
 ```bash
-bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
+bash bootstrap.sh --media-dir /Volumes/T9/Media --config-dir ~/home-media-stack/config --install-dir ~/mac-media-stack
 ```
 
 To use Jellyfin instead of Plex:
@@ -163,9 +163,13 @@ This creates all the folders and prepares your configuration file.
 bash scripts/setup.sh          # ProtonVPN defaults
 # or:
 bash scripts/setup.sh --pia    # PIA defaults
+# or with explicit paths:
+# bash scripts/setup.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
 ```
 
 You should see "Setup complete!" at the end.
+
+`scripts/setup.sh` also generates a local runbook at `~/home-media-stack/README.md` with resolved paths and troubleshooting commands.
 
 ---
 
@@ -176,6 +180,15 @@ Open the `.env` file in TextEdit:
 ```bash
 open -a TextEdit .env
 ```
+
+For a network media share + local app databases, set:
+
+```env
+MEDIA_DIR=/Volumes/media
+CONFIG_DIR=/Users/YOURUSERNAME/home-media-stack/config
+```
+
+Keep `CONFIG_DIR` on local disk. Putting app databases on SMB/NFS can cause `database is locked` errors.
 
 ### ProtonVPN (default)
 
@@ -267,10 +280,10 @@ Everything should show OK. If VPN shows FAIL, double-check your VPN credentials 
 2. Go to Settings (wrench icon) > Libraries > Add Library
 3. Add a **Movies** library:
    - Type: Movies
-   - Add folder: click "Browse" and navigate to your home folder > Media > Movies
+   - Add folder: your `MEDIA_DIR` Movies path (for example `/Volumes/media/Movies`)
 4. Add a **TV Shows** library:
    - Type: TV Shows
-   - Add folder: click "Browse" and navigate to your home folder > Media > TV Shows
+   - Add folder: your `MEDIA_DIR` TV path (for example `/Volumes/media/TV Shows`)
 5. That's it. Plex will automatically scan these folders whenever new media appears.
 
 **Important:** Always access Plex at `http://localhost:32400/web` from the server Mac itself. This avoids the "Plex Pass" paywall for remote streaming setup.

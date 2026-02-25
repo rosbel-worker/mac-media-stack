@@ -70,13 +70,27 @@ MEDIA_DIR="$(strip_wrapping_quotes "$MEDIA_DIR")"
 MEDIA_DIR="${MEDIA_DIR:-$HOME/Media}"
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
 
+CONFIG_DIR="${CONFIG_DIR:-$(read_env_value CONFIG_DIR)}"
+CONFIG_DIR="$(strip_wrapping_quotes "$CONFIG_DIR")"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/home-media-stack/config}"
+CONFIG_DIR="${CONFIG_DIR/#\~/$HOME}"
+
 MEDIA_SERVER="${MEDIA_SERVER:-$(read_env_value MEDIA_SERVER)}"
 MEDIA_SERVER="$(strip_wrapping_quotes "$MEDIA_SERVER")"
 MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 
-# Permanent qBittorrent password (generated randomly)
-QB_PASSWORD="media$(openssl rand -hex 12)"
 CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
+EXISTING_QB_PASSWORD=""
+if [[ -f "$CREDS_FILE" ]]; then
+    EXISTING_QB_PASSWORD=$(sed -n 's/^qBittorrent Password: //p' "$CREDS_FILE" | head -1 || true)
+fi
+
+# Keep a stable qBittorrent password across reruns when available.
+if [[ -n "$EXISTING_QB_PASSWORD" ]]; then
+    QB_PASSWORD="$EXISTING_QB_PASSWORD"
+else
+    QB_PASSWORD="media$(openssl rand -hex 12)"
+fi
 
 # ============================================================
 # Helper functions
@@ -106,29 +120,85 @@ api_post_json() {
     local api_key="$3"
     local payload="$4"
     local body_file http_code
+    local attempt=1
+    local max_attempts=5
 
-    body_file="$(mktemp)"
-    http_code=$(curl -sS -o "$body_file" -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -H "X-Api-Key: $api_key" \
-        -d "$payload" "$url" || echo "000")
+    while true; do
+        body_file="$(mktemp)"
+        http_code=$(curl -sS -o "$body_file" -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -H "X-Api-Key: $api_key" \
+            -d "$payload" "$url" || echo "000")
 
-    if [[ "$http_code" =~ ^2 ]]; then
-        log "$label"
+        if [[ "$http_code" =~ ^2 ]]; then
+            log "$label"
+            rm -f "$body_file"
+            return 0
+        fi
+
+        if grep -qiE "database is locked" "$body_file" && [[ $attempt -lt $max_attempts ]]; then
+            warn "$label (database busy, retrying...)"
+            rm -f "$body_file"
+            attempt=$((attempt + 1))
+            sleep 2
+            continue
+        fi
+
+        if grep -qiE "already exists|already configured|must be unique|should be unique|duplicate" "$body_file"; then
+            warn "$label (already configured)"
+            rm -f "$body_file"
+            return 0
+        fi
+
+        fail "$label (HTTP $http_code)"
+        sed -n '1,2p' "$body_file" >&2 || true
         rm -f "$body_file"
-        return 0
-    fi
+        return 1
+    done
+}
 
-    if grep -qiE "already exists|must be unique|duplicate" "$body_file"; then
-        warn "$label (already configured)"
+api_put_json() {
+    local label="$1"
+    local url="$2"
+    local api_key="$3"
+    local payload="$4"
+    local body_file http_code
+    local attempt=1
+    local max_attempts=5
+
+    while true; do
+        body_file="$(mktemp)"
+        http_code=$(curl -sS -o "$body_file" -w "%{http_code}" \
+            -X PUT \
+            -H "Content-Type: application/json" \
+            -H "X-Api-Key: $api_key" \
+            -d "$payload" "$url" || echo "000")
+
+        if [[ "$http_code" =~ ^2 ]]; then
+            log "$label"
+            rm -f "$body_file"
+            return 0
+        fi
+
+        if grep -qiE "database is locked" "$body_file" && [[ $attempt -lt $max_attempts ]]; then
+            warn "$label (database busy, retrying...)"
+            rm -f "$body_file"
+            attempt=$((attempt + 1))
+            sleep 2
+            continue
+        fi
+
+        if grep -qiE "already exists|already configured|must be unique|should be unique|duplicate" "$body_file"; then
+            warn "$label (already configured)"
+            rm -f "$body_file"
+            return 0
+        fi
+
+        fail "$label (HTTP $http_code)"
+        sed -n '1,2p' "$body_file" >&2 || true
         rm -f "$body_file"
-        return 0
-    fi
-
-    fail "$label (HTTP $http_code)"
-    sed -n '1,2p' "$body_file" >&2 || true
-    rm -f "$body_file"
-    return 1
+        return 1
+    done
 }
 
 api_post_form() {
@@ -137,12 +207,25 @@ api_post_form() {
     local cookie="$3"
     shift 3
 
-    if curl -fsS -b "$cookie" "$url" "$@" >/dev/null; then
+    local body_file http_code
+    body_file="$(mktemp)"
+    http_code=$(curl -sS -o "$body_file" -w "%{http_code}" -b "$cookie" "$url" "$@" || echo "000")
+
+    if [[ "$http_code" =~ ^2 ]]; then
         log "$label"
+        rm -f "$body_file"
         return 0
     fi
 
-    fail "$label"
+    if [[ "$http_code" == "409" ]] || grep -qiE "already exists|already configured|must be unique|should be unique|duplicate" "$body_file"; then
+        warn "$label (already configured)"
+        rm -f "$body_file"
+        return 0
+    fi
+
+    fail "$label (HTTP $http_code)"
+    sed -n '1,2p' "$body_file" >&2 || true
+    rm -f "$body_file"
     return 1
 }
 
@@ -155,7 +238,7 @@ wait_for_service() {
     warn "Waiting for $name..."
     while [[ $attempt -lt $max_attempts ]]; do
         status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || true)
-        if [[ "$status" =~ ^(200|301|302|401|403)$ ]]; then
+        if [[ "$status" =~ ^(200|301|302|307|308|401|403)$ ]]; then
             log "$name is ready"
             return 0
         fi
@@ -168,7 +251,7 @@ wait_for_service() {
 
 get_api_key() {
     local service="$1"
-    local config_path="$MEDIA_DIR/config/$service/config.xml"
+    local config_path="$CONFIG_DIR/$service/config.xml"
     local max_attempts=30
     local attempt=0
 
@@ -242,28 +325,44 @@ echo -e "${CYAN}[3/6] Configuring qBittorrent...${NC}"
 echo ""
 
 # Get temporary password from logs
-QB_TEMP_PASS=$(docker logs qbittorrent 2>&1 | grep -o 'temporary password is provided for this session: [^ ]*' | tail -1 | awk '{print $NF}')
+QB_TEMP_PASS=$(docker logs qbittorrent 2>&1 | grep -o 'temporary password is provided for this session: [^ ]*' | tail -1 | awk '{print $NF}' || true)
 
 if [[ -z "$QB_TEMP_PASS" ]]; then
     # Try the older log format
-    QB_TEMP_PASS=$(docker logs qbittorrent 2>&1 | sed -n 's/.*password: \([^[:space:]]*\).*/\1/p' | tail -1)
+    QB_TEMP_PASS=$(docker logs qbittorrent 2>&1 | sed -n 's/.*password: \([^[:space:]]*\).*/\1/p' | tail -1 || true)
 fi
 
 if [[ -z "$QB_TEMP_PASS" ]]; then
     warn "Could not find temp password. qBit may already be configured."
-    # Try default admin/adminadmin
-    QB_TEMP_PASS="adminadmin"
+    if [[ -n "$EXISTING_QB_PASSWORD" ]]; then
+        warn "Using saved qBittorrent password from first-run credentials"
+        QB_TEMP_PASS="$EXISTING_QB_PASSWORD"
+    else
+        # Try default admin/adminadmin on first run.
+        QB_TEMP_PASS="adminadmin"
+    fi
 fi
+
+QB_AUTHENTICATED=false
 
 # Authenticate with qBittorrent
 QB_COOKIE=$(curl -s -c - "http://localhost:8080/api/v2/auth/login" \
     --data-urlencode "username=admin" \
-    --data-urlencode "password=$QB_TEMP_PASS" 2>/dev/null | grep SID | awk '{print $NF}')
+    --data-urlencode "password=$QB_TEMP_PASS" 2>/dev/null | grep SID | awk '{print $NF}' || true)
+
+if [[ -z "$QB_COOKIE" && "$QB_TEMP_PASS" != "adminadmin" ]]; then
+    warn "qBittorrent auth failed with detected password, trying adminadmin fallback"
+    QB_TEMP_PASS="adminadmin"
+    QB_COOKIE=$(curl -s -c - "http://localhost:8080/api/v2/auth/login" \
+        --data-urlencode "username=admin" \
+        --data-urlencode "password=$QB_TEMP_PASS" 2>/dev/null | grep SID | awk '{print $NF}' || true)
+fi
 
 if [[ -z "$QB_COOKIE" ]]; then
     fail "Could not authenticate with qBittorrent"
     echo "  You may need to configure it manually at http://localhost:8080"
 else
+    QB_AUTHENTICATED=true
     # Set permanent password + all preferences in one call
     api_post_form "Password set and preferences configured" "http://localhost:8080/api/v2/app/setPreferences" "SID=$QB_COOKIE" \
         --data-urlencode "json={
@@ -288,7 +387,11 @@ else
         --data-urlencode "savePath=/downloads/complete/tv-sonarr"
 fi
 
-save_credentials
+if [[ "$QB_AUTHENTICATED" == true ]] || [[ ! -f "$CREDS_FILE" ]]; then
+    save_credentials
+else
+    warn "Skipping credential file update because qBittorrent authentication failed"
+fi
 
 echo ""
 
@@ -305,31 +408,36 @@ api_post_json "Radarr root folder set to /movies" \
     "$RADARR_KEY" \
     '{"path": "/movies", "accessible": true}'
 
-# --- Radarr: Add qBittorrent download client ---
-api_post_json "Radarr download client configured" \
-    "http://localhost:7878/api/v3/downloadclient" \
-    "$RADARR_KEY" \
-    "{
-        \"enable\": true,
-        \"protocol\": \"torrent\",
-        \"name\": \"qBittorrent\",
-        \"implementation\": \"QBittorrent\",
-        \"configContract\": \"QBittorrentSettings\",
-        \"fields\": [
-            {\"name\": \"host\", \"value\": \"gluetun\"},
-            {\"name\": \"port\", \"value\": 8080},
-            {\"name\": \"username\", \"value\": \"admin\"},
-            {\"name\": \"password\", \"value\": \"$QB_PASSWORD\"},
-            {\"name\": \"movieCategory\", \"value\": \"radarr\"},
-            {\"name\": \"recentMoviePriority\", \"value\": 0},
-            {\"name\": \"olderMoviePriority\", \"value\": 0},
-            {\"name\": \"initialState\", \"value\": 0},
-            {\"name\": \"sequentialOrder\", \"value\": false},
-            {\"name\": \"firstAndLast\", \"value\": false}
-        ],
-        \"removeCompletedDownloads\": true,
-        \"removeFailedDownloads\": true
-    }"
+if [[ "$QB_AUTHENTICATED" == true ]]; then
+    # --- Radarr: Add qBittorrent download client ---
+    api_post_json "Radarr download client configured" \
+        "http://localhost:7878/api/v3/downloadclient" \
+        "$RADARR_KEY" \
+        "{
+            \"enable\": true,
+            \"protocol\": \"torrent\",
+            \"priority\": 1,
+            \"name\": \"qBittorrent\",
+            \"implementation\": \"QBittorrent\",
+            \"configContract\": \"QBittorrentSettings\",
+            \"fields\": [
+                {\"name\": \"host\", \"value\": \"gluetun\"},
+                {\"name\": \"port\", \"value\": 8080},
+                {\"name\": \"username\", \"value\": \"admin\"},
+                {\"name\": \"password\", \"value\": \"$QB_PASSWORD\"},
+                {\"name\": \"movieCategory\", \"value\": \"radarr\"},
+                {\"name\": \"recentMoviePriority\", \"value\": 0},
+                {\"name\": \"olderMoviePriority\", \"value\": 0},
+                {\"name\": \"initialState\", \"value\": 0},
+                {\"name\": \"sequentialOrder\", \"value\": false},
+                {\"name\": \"firstAndLast\", \"value\": false}
+            ],
+            \"removeCompletedDownloads\": true,
+            \"removeFailedDownloads\": true
+        }"
+else
+    warn "Skipping Radarr download client setup (qBittorrent authentication failed earlier)"
+fi
 
 # --- Sonarr: Add root folder ---
 api_post_json "Sonarr root folder set to /tv" \
@@ -337,31 +445,36 @@ api_post_json "Sonarr root folder set to /tv" \
     "$SONARR_KEY" \
     '{"path": "/tv", "accessible": true}'
 
-# --- Sonarr: Add qBittorrent download client ---
-api_post_json "Sonarr download client configured" \
-    "http://localhost:8989/api/v3/downloadclient" \
-    "$SONARR_KEY" \
-    "{
-        \"enable\": true,
-        \"protocol\": \"torrent\",
-        \"name\": \"qBittorrent\",
-        \"implementation\": \"QBittorrent\",
-        \"configContract\": \"QBittorrentSettings\",
-        \"fields\": [
-            {\"name\": \"host\", \"value\": \"gluetun\"},
-            {\"name\": \"port\", \"value\": 8080},
-            {\"name\": \"username\", \"value\": \"admin\"},
-            {\"name\": \"password\", \"value\": \"$QB_PASSWORD\"},
-            {\"name\": \"tvCategory\", \"value\": \"tv-sonarr\"},
-            {\"name\": \"recentTvPriority\", \"value\": 0},
-            {\"name\": \"olderTvPriority\", \"value\": 0},
-            {\"name\": \"initialState\", \"value\": 0},
-            {\"name\": \"sequentialOrder\", \"value\": false},
-            {\"name\": \"firstAndLast\", \"value\": false}
-        ],
-        \"removeCompletedDownloads\": true,
-        \"removeFailedDownloads\": true
-    }"
+if [[ "$QB_AUTHENTICATED" == true ]]; then
+    # --- Sonarr: Add qBittorrent download client ---
+    api_post_json "Sonarr download client configured" \
+        "http://localhost:8989/api/v3/downloadclient" \
+        "$SONARR_KEY" \
+        "{
+            \"enable\": true,
+            \"protocol\": \"torrent\",
+            \"priority\": 1,
+            \"name\": \"qBittorrent\",
+            \"implementation\": \"QBittorrent\",
+            \"configContract\": \"QBittorrentSettings\",
+            \"fields\": [
+                {\"name\": \"host\", \"value\": \"gluetun\"},
+                {\"name\": \"port\", \"value\": 8080},
+                {\"name\": \"username\", \"value\": \"admin\"},
+                {\"name\": \"password\", \"value\": \"$QB_PASSWORD\"},
+                {\"name\": \"tvCategory\", \"value\": \"tv-sonarr\"},
+                {\"name\": \"recentTvPriority\", \"value\": 0},
+                {\"name\": \"olderTvPriority\", \"value\": 0},
+                {\"name\": \"initialState\", \"value\": 0},
+                {\"name\": \"sequentialOrder\", \"value\": false},
+                {\"name\": \"firstAndLast\", \"value\": false}
+            ],
+            \"removeCompletedDownloads\": true,
+            \"removeFailedDownloads\": true
+        }"
+else
+    warn "Skipping Sonarr download client setup (qBittorrent authentication failed earlier)"
+fi
 
 echo ""
 
@@ -404,7 +517,7 @@ add_indexer() {
     local base_url="$3"
     local tags="$4"
 
-    api_post_json "Indexer added: $name" \
+    if ! api_post_json "Indexer added: $name" \
         "http://localhost:9696/api/v1/indexer" \
         "$PROWLARR_KEY" \
         "{
@@ -420,7 +533,9 @@ add_indexer() {
                 {\"name\": \"multiLanguages\", \"value\": []}
             ],
             \"tags\": [$tags]
-        }"
+        }"; then
+        warn "Indexer setup skipped for $name due API validation error"
+    fi
 }
 
 # Cardigann-based indexers use a different format
@@ -430,7 +545,7 @@ add_cardigann_indexer() {
     local base_url="$3"
     local tags="$4"
 
-    api_post_json "Indexer added: $name" \
+    if ! api_post_json "Indexer added: $name" \
         "http://localhost:9696/api/v1/indexer" \
         "$PROWLARR_KEY" \
         "{
@@ -447,7 +562,9 @@ add_cardigann_indexer() {
                 {\"name\": \"multiLanguages\", \"value\": []}
             ],
             \"tags\": [$tags]
-        }"
+        }"; then
+        warn "Indexer setup skipped for $name due API validation error"
+    fi
 }
 
 add_cardigann_indexer "YTS" "yts" "https://yts.mx" ""
@@ -492,10 +609,12 @@ api_post_json "Prowlarr connected to Sonarr" \
     }"
 
 # --- Trigger Prowlarr to sync indexers to apps ---
-api_post_json "Indexer sync triggered" \
+if ! api_post_json "Indexer sync triggered" \
     "http://localhost:9696/api/v1/command" \
     "$PROWLARR_KEY" \
-    '{"name": "SyncIndexers"}'
+    '{"name": "SyncIndexers"}'; then
+    warn "Prowlarr SyncIndexers command skipped due API validation error"
+fi
 
 echo ""
 
@@ -534,16 +653,24 @@ else
     sleep 3
 fi
 
-# Get Seerr API key from settings
-SEERR_KEY=$(curl -fsS "http://localhost:5055/api/v1/settings/main" 2>/dev/null | grep -o '"apiKey":"[^"]*"' | cut -d'"' -f4)
+# Get Seerr API key from API first, then settings.json fallback (Seerr v3 requires auth cookie for /settings/main without API key header).
+SEERR_KEY=$(curl -fsS "http://localhost:5055/api/v1/settings/main" 2>/dev/null | grep -o '"apiKey":"[^"]*"' | cut -d'"' -f4 || true)
+if [[ -z "$SEERR_KEY" ]]; then
+    SEERR_SETTINGS_FILE="$CONFIG_DIR/seerr/settings.json"
+    if [[ -f "$SEERR_SETTINGS_FILE" ]]; then
+        SEERR_KEY=$(sed -n 's/.*"apiKey":[[:space:]]*"\([^"]*\)".*/\1/p' "$SEERR_SETTINGS_FILE" | head -1 || true)
+    fi
+fi
 
 if [[ -z "$SEERR_KEY" ]]; then
     warn "Could not get Seerr API key. You may need to configure Radarr/Sonarr in Seerr manually."
-    warn "Go to Seerr Settings > Services and add Radarr (localhost:7878) and Sonarr (localhost:8989)."
+    warn "Go to Seerr Settings > Services and add Radarr (radarr:7878) and Sonarr (sonarr:8989)."
 else
     # Get default quality profile and root folder IDs from Radarr
     RADARR_PROFILE_ID=$(curl -fsS "http://localhost:7878/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     RADARR_PROFILE_ID="${RADARR_PROFILE_ID:-1}"
+    RADARR_PROFILE_NAME=$(curl -fsS "http://localhost:7878/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | head -1 || true)
+    RADARR_PROFILE_NAME="${RADARR_PROFILE_NAME:-Any}"
 
     RADARR_ROOT_ID=$(curl -fsS "http://localhost:7878/api/v3/rootfolder" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     RADARR_ROOT_ID="${RADARR_ROOT_ID:-1}"
@@ -551,46 +678,83 @@ else
     # Get default quality profile and root folder IDs from Sonarr
     SONARR_PROFILE_ID=$(curl -fsS "http://localhost:8989/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     SONARR_PROFILE_ID="${SONARR_PROFILE_ID:-1}"
+    SONARR_PROFILE_NAME=$(curl -fsS "http://localhost:8989/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | head -1 || true)
+    SONARR_PROFILE_NAME="${SONARR_PROFILE_NAME:-Any}"
+    SONARR_LANGUAGE_PROFILE_ID=$(curl -fsS "http://localhost:8989/api/v3/languageprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
+    SONARR_LANGUAGE_PROFILE_ID="${SONARR_LANGUAGE_PROFILE_ID:-1}"
 
     SONARR_ROOT_ID=$(curl -fsS "http://localhost:8989/api/v3/rootfolder" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     SONARR_ROOT_ID="${SONARR_ROOT_ID:-1}"
 
-    # Add Radarr to Seerr
-    api_post_json "Seerr connected to Radarr" \
-        "http://localhost:5055/api/v1/settings/radarr" \
-        "$SEERR_KEY" \
-        "[{
-            \"name\": \"Radarr\",
-            \"hostname\": \"radarr\",
-            \"port\": 7878,
-            \"apiKey\": \"$RADARR_KEY\",
-            \"useSsl\": false,
-            \"activeProfileId\": $RADARR_PROFILE_ID,
-            \"activeDirectory\": \"/movies\",
-            \"is4k\": false,
-            \"isDefault\": true,
-            \"externalUrl\": \"http://localhost:7878\"
-        }]"
+    RADARR_SETTINGS_PAYLOAD="{
+        \"name\": \"Radarr\",
+        \"hostname\": \"radarr\",
+        \"port\": 7878,
+        \"apiKey\": \"$RADARR_KEY\",
+        \"useSsl\": false,
+        \"activeProfileId\": $RADARR_PROFILE_ID,
+        \"activeProfileName\": \"$RADARR_PROFILE_NAME\",
+        \"activeDirectory\": \"/movies\",
+        \"is4k\": false,
+        \"minimumAvailability\": \"released\",
+        \"isDefault\": true,
+        \"externalUrl\": \"http://localhost:7878\"
+    }"
 
-    # Add Sonarr to Seerr
-    api_post_json "Seerr connected to Sonarr" \
-        "http://localhost:5055/api/v1/settings/sonarr" \
-        "$SEERR_KEY" \
-        "[{
-            \"name\": \"Sonarr\",
-            \"hostname\": \"sonarr\",
-            \"port\": 8989,
-            \"apiKey\": \"$SONARR_KEY\",
-            \"useSsl\": false,
-            \"activeProfileId\": $SONARR_PROFILE_ID,
-            \"activeDirectory\": \"/tv\",
-            \"activeAnimeProfileId\": $SONARR_PROFILE_ID,
-            \"activeAnimeDirectory\": \"/tv\",
-            \"is4k\": false,
-            \"isDefault\": true,
-            \"enableSeasonFolders\": true,
-            \"externalUrl\": \"http://localhost:8989\"
-        }]"
+    SONARR_SETTINGS_PAYLOAD="{
+        \"name\": \"Sonarr\",
+        \"hostname\": \"sonarr\",
+        \"port\": 8989,
+        \"apiKey\": \"$SONARR_KEY\",
+        \"useSsl\": false,
+        \"activeProfileId\": $SONARR_PROFILE_ID,
+        \"activeProfileName\": \"$SONARR_PROFILE_NAME\",
+        \"activeDirectory\": \"/tv\",
+        \"activeLanguageProfileId\": $SONARR_LANGUAGE_PROFILE_ID,
+        \"activeAnimeProfileId\": $SONARR_PROFILE_ID,
+        \"activeAnimeProfileName\": \"$SONARR_PROFILE_NAME\",
+        \"activeAnimeDirectory\": \"/tv\",
+        \"activeAnimeLanguageProfileId\": $SONARR_LANGUAGE_PROFILE_ID,
+        \"is4k\": false,
+        \"isDefault\": true,
+        \"enableSeasonFolders\": true,
+        \"externalUrl\": \"http://localhost:8989\"
+    }"
+
+    # Create or update Radarr in Seerr (v3 API uses object payloads).
+    SEERR_RADARR_ID=$(curl -fsS "http://localhost:5055/api/v1/settings/radarr" -H "X-Api-Key: $SEERR_KEY" 2>/dev/null | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -1 || true)
+    if [[ -n "$SEERR_RADARR_ID" ]]; then
+        api_put_json "Seerr connected to Radarr" \
+            "http://localhost:5055/api/v1/settings/radarr/$SEERR_RADARR_ID" \
+            "$SEERR_KEY" \
+            "$RADARR_SETTINGS_PAYLOAD"
+    else
+        api_post_json "Seerr connected to Radarr" \
+            "http://localhost:5055/api/v1/settings/radarr" \
+            "$SEERR_KEY" \
+            "$RADARR_SETTINGS_PAYLOAD"
+    fi
+
+    # Create or update Sonarr in Seerr (v3 API uses object payloads).
+    SEERR_SONARR_ID=$(curl -fsS "http://localhost:5055/api/v1/settings/sonarr" -H "X-Api-Key: $SEERR_KEY" 2>/dev/null | sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -1 || true)
+    if [[ -n "$SEERR_SONARR_ID" ]]; then
+        api_put_json "Seerr connected to Sonarr" \
+            "http://localhost:5055/api/v1/settings/sonarr/$SEERR_SONARR_ID" \
+            "$SEERR_KEY" \
+            "$SONARR_SETTINGS_PAYLOAD"
+    else
+        api_post_json "Seerr connected to Sonarr" \
+            "http://localhost:5055/api/v1/settings/sonarr" \
+            "$SEERR_KEY" \
+            "$SONARR_SETTINGS_PAYLOAD"
+    fi
+
+    # Mark setup complete so Seerr leaves the setup wizard.
+    if curl -fsS -X POST "http://localhost:5055/api/v1/settings/initialize" -H "X-Api-Key: $SEERR_KEY" >/dev/null; then
+        log "Seerr setup marked initialized"
+    else
+        warn "Could not mark Seerr setup as initialized; you may still see the setup wizard."
+    fi
 fi
 
 echo ""
