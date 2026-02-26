@@ -66,6 +66,15 @@ is_http_ok() {
     [[ "$code" =~ ^(200|301|302|307|308|401|403)$ ]]
 }
 
+container_http_ok() {
+    local name="$1"
+    local url="$2"
+    local code
+
+    code=$(docker exec "$name" sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 5 '$url' 2>/dev/null || true" 2>/dev/null)
+    [[ "$code" =~ ^(200|301|302|307|308|401|403)$ ]]
+}
+
 recreate_service() {
     local name="$1"
     log "WARN: Recreating $name..."
@@ -225,6 +234,21 @@ if ! is_http_ok "http://localhost:8080" || ! docker exec gluetun sh -lc 'wget -q
     recreate_service qbittorrent
     sleep 8
 fi
+
+# Ensure Arr services can still reach qBittorrent via gluetun.
+for arr in radarr sonarr; do
+    if [[ "$(container_state "$arr")" != "running" ]]; then
+        continue
+    fi
+
+    if container_http_ok "$arr" "http://gluetun:8080"; then
+        log "OK: $arr can reach qBittorrent via gluetun:8080"
+    else
+        log "WARN: $arr cannot reach qBittorrent via gluetun:8080"
+        restart_service "$arr"
+        sleep 5
+    fi
+done
 
 # Core container state/health checks.
 for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr; do

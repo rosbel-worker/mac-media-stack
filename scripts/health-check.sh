@@ -53,6 +53,15 @@ get_netns_id() {
         | awk -F'[][]' '/^net:\[[0-9]+\]$/ {print $2; exit}'
 }
 
+container_http_ok() {
+    local name="$1"
+    local url="$2"
+    local code
+
+    code=$(docker exec "$name" sh -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 5 '$url' 2>/dev/null || true" 2>/dev/null)
+    [[ "$code" =~ ^(200|301|302|307|308|401|403)$ ]]
+}
+
 RUNTIME=$(detect_installed_runtime)
 
 if docker info &>/dev/null; then
@@ -143,6 +152,20 @@ if [[ -n "$gluetun_netns" && -n "$qbittorrent_netns" ]]; then
 else
     echo -e "  ${YELLOW}SKIP${NC}  Could not verify qBittorrent/gluetun namespace IDs"
 fi
+
+for arr in radarr sonarr; do
+    if [[ "$(docker inspect -f '{{.State.Status}}' "$arr" 2>/dev/null)" != "running" ]]; then
+        continue
+    fi
+
+    if container_http_ok "$arr" "http://gluetun:8080"; then
+        echo -e "  ${GREEN}OK${NC}  $arr can reach qBittorrent via gluetun:8080"
+        ((PASS++))
+    else
+        echo -e "  ${RED}FAIL${NC}  $arr cannot reach qBittorrent via gluetun:8080"
+        ((FAIL++))
+    fi
+done
 
 echo ""
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
