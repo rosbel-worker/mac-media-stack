@@ -132,6 +132,8 @@ CONFIG_DIR=/Users/YOURUSERNAME/home-media-stack/config
 
 Using SMB/NFS for `CONFIG_DIR` can cause SQLite `database is locked` errors.
 
+If `MEDIA_DIR` lives under `/Volumes/...`, make sure that volume is mounted before expecting the full stack to come up after a reboot. `restart: unless-stopped` is not enough on its own on macOS because Docker can start before the media volume is available.
+
 ## Manual Quick Start
 
 If you prefer to run each step yourself:
@@ -154,6 +156,18 @@ bash scripts/configure.sh     # auto-configure all services + Radarr/Sonarr/Prow
 
 `scripts/configure.sh` also ensures Arr download category folders exist (`/downloads/complete/radarr` and `/downloads/complete/tv-sonarr`) and applies Prowlarr indexer payloads with valid priorities for current API validation.
 
+If the media mount is missing after a reboot, mount-dependent services (`qbittorrent`, `sonarr`, `radarr`, `bazarr`, and `jellyfin` when enabled) stay paused instead of repeatedly failing against `/Volumes/...`. `gluetun`, `prowlarr`, `seerr`, and `flaresolverr` can still recover independently. Once the mount returns, the auto-healer resumes the paused services automatically.
+
+Manual recovery after the mount returns:
+
+```bash
+bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
+docker compose up -d qbittorrent sonarr radarr bazarr
+# if MEDIA_SERVER=jellyfin in .env:
+docker compose --profile jellyfin up -d jellyfin
+bash scripts/health-check.sh
+```
+
 ## Full Setup Guide
 
 See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
@@ -166,15 +180,17 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | Script | Purpose |
 |--------|---------|
 | `scripts/setup.sh` | Creates folder structure, migrates legacy config to local disk, and generates `.env` |
-| `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports) |
+| `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports, and external media mount readiness) |
 | `scripts/configure.sh` | Auto-configures service connections (including Radarr/Sonarr/Prowlarr auth defaults) |
-| `scripts/health-check.sh` | Checks if everything is running correctly |
-| `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift) |
-| `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
+| `scripts/health-check.sh` | Checks if everything is running correctly and reports paused services when `MEDIA_DIR` is unavailable |
+| `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift, pauses mount-dependent services, and alerts after 15 minutes of downtime) |
+| `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd, with mount watch paths for faster resume |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |
 
 Local path/runbook reference is generated at `~/home-media-stack/README.md` each time `scripts/setup.sh` runs.
+
+Auto-heal logs go to `<MEDIA_DIR>/logs/auto-heal.log` when the mount is ready, or `~/Library/Logs/media-stack/auto-heal.log` when it is not. Launchd stdout/stderr logs live under `~/Library/Logs/media-stack/launchd/`. If mount-dependent services stay down for 15 minutes, auto-heal sends a local macOS notification and sends a recovery notification once the stack is healthy again.
 
 ## What It Looks Like
 

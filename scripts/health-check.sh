@@ -10,18 +10,25 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/runtime.sh
 source "$SCRIPT_DIR/scripts/lib/runtime.sh"
+# shellcheck source=scripts/lib/media-path.sh
+source "$SCRIPT_DIR/scripts/lib/media-path.sh"
 
-# Load media server choice
+MEDIA_DIR="$(resolve_media_dir "$SCRIPT_DIR")"
+MEDIA_MOUNT_REASON="$(media_mount_reason "$SCRIPT_DIR")"
+MEDIA_READY=false
+if media_mount_ready "$SCRIPT_DIR"; then
+    MEDIA_READY=true
+fi
+
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     MEDIA_SERVER=$(sed -n 's/^MEDIA_SERVER=//p' "$SCRIPT_DIR/.env" | head -1)
-fi
-MEDIA_SERVER="${MEDIA_SERVER:-plex}"
-
-# Load VPN provider choice
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
     VPN_PROVIDER=$(sed -n 's/^VPN_PROVIDER=//p' "$SCRIPT_DIR/.env" | head -1)
 fi
+MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 VPN_PROVIDER="${VPN_PROVIDER:-protonvpn}"
+
+read -r -a MOUNT_DEPENDENT_SERVICES <<< "$(mount_dependent_services "$SCRIPT_DIR")"
+read -r -a MOUNT_INDEPENDENT_SERVICES <<< "$(mount_independent_services "$SCRIPT_DIR")"
 
 echo ""
 echo "=============================="
@@ -32,19 +39,41 @@ echo ""
 PASS=0
 FAIL=0
 
+ok() {
+    echo -e "  ${GREEN}OK${NC}  $1"
+    ((PASS++))
+}
+
+fail() {
+    echo -e "  ${RED}FAIL${NC}  $1"
+    ((FAIL++))
+}
+
+skip() {
+    echo -e "  ${YELLOW}SKIP${NC}  $1"
+}
+
+paused() {
+    echo -e "  ${YELLOW}PAUSED${NC}  $1"
+}
+
 check_service() {
     local name="$1"
     local url="$2"
     local expected="${3:-200}"
+    local status
 
     status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)
     if [[ "$status" == "$expected" || "$status" == "301" || "$status" == "302" || "$status" == "307" || "$status" == "308" ]]; then
-        echo -e "  ${GREEN}OK${NC}  $name"
-        ((PASS++))
+        ok "$name"
     else
-        echo -e "  ${RED}FAIL${NC}  $name (got HTTP $status)"
-        ((FAIL++))
+        fail "$name (got HTTP $status)"
     fi
+}
+
+container_state() {
+    local name="$1"
+    docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true
 }
 
 get_netns_id() {
@@ -62,60 +91,81 @@ container_http_ok() {
     [[ "$code" =~ ^(200|301|302|307|308|401|403)$ ]]
 }
 
+mount_reason_text() {
+    case "$MEDIA_MOUNT_REASON" in
+        missing_mount) echo "Media mount unavailable: $MEDIA_DIR" ;;
+        missing_subdirs) echo "Media mount missing required directories under $MEDIA_DIR" ;;
+        local_path_missing) echo "Local media path missing: $MEDIA_DIR" ;;
+        *) echo "Media path unavailable: $MEDIA_DIR" ;;
+    esac
+}
+
 RUNTIME=$(detect_installed_runtime)
 
 if docker info &>/dev/null; then
     RUNTIME=$(detect_running_runtime)
-    echo -e "  ${GREEN}OK${NC}  $RUNTIME"
-    ((PASS++))
+    ok "$RUNTIME"
 else
-    echo -e "  ${RED}FAIL${NC}  $RUNTIME (not running)"
+    fail "$RUNTIME (not running)"
     echo ""
     echo "Start $RUNTIME and try again."
     exit 1
 fi
 
 echo ""
+echo "Media Path:"
+if [[ "$MEDIA_READY" == true ]]; then
+    ok "Media mount ready: $MEDIA_DIR"
+else
+    fail "$(mount_reason_text)"
+fi
 
-# Check containers are running
+echo ""
 echo "Containers:"
-for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr; do
-    state=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
+for name in "${MOUNT_INDEPENDENT_SERVICES[@]}"; do
+    state="$(container_state "$name")"
     if [[ "$state" == "running" ]]; then
-        echo -e "  ${GREEN}OK${NC}  $name"
-        ((PASS++))
+        ok "$name"
     else
-        echo -e "  ${RED}FAIL${NC}  $name (${state:-not found})"
-        ((FAIL++))
+        fail "$name (${state:-not found})"
     fi
 done
 
-if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    jf_state=$(docker inspect -f '{{.State.Status}}' jellyfin 2>/dev/null)
-    if [[ "$jf_state" == "running" ]]; then
-        echo -e "  ${GREEN}OK${NC}  jellyfin"
-        ((PASS++))
-    else
-        echo -e "  ${RED}FAIL${NC}  jellyfin (${jf_state:-not found})"
-        ((FAIL++))
+for name in "${MOUNT_DEPENDENT_SERVICES[@]}"; do
+    state="$(container_state "$name")"
+    if [[ "$MEDIA_READY" != true && "$state" != "running" ]]; then
+        paused "$name (MEDIA_DIR unavailable)"
+        continue
     fi
-fi
 
-watchtower_state=$(docker inspect -f '{{.State.Status}}' watchtower 2>/dev/null || true)
+    if [[ "$state" == "running" ]]; then
+        ok "$name"
+    else
+        fail "$name (${state:-not found})"
+    fi
+done
+
+watchtower_state=$(container_state watchtower)
 if [[ "$watchtower_state" == "running" ]]; then
-    echo -e "  ${GREEN}OK${NC}  watchtower (autoupdate profile enabled)"
-    ((PASS++))
+    ok "watchtower (autoupdate profile enabled)"
 else
-    echo -e "  ${YELLOW}SKIP${NC}  watchtower (optional; enable with --profile autoupdate)"
+    skip "watchtower (optional; enable with --profile autoupdate)"
 fi
 
 echo ""
 echo "Web UIs:"
-check_service "qBittorrent" "http://localhost:8080"
+if [[ "$MEDIA_READY" == true ]]; then
+    check_service "qBittorrent" "http://localhost:8080"
+    check_service "Sonarr" "http://localhost:8989"
+    check_service "Radarr" "http://localhost:7878"
+    check_service "Bazarr" "http://localhost:6767"
+else
+    paused "qBittorrent (MEDIA_DIR unavailable)"
+    paused "Sonarr (MEDIA_DIR unavailable)"
+    paused "Radarr (MEDIA_DIR unavailable)"
+    paused "Bazarr (MEDIA_DIR unavailable)"
+fi
 check_service "Prowlarr" "http://localhost:9696"
-check_service "Sonarr" "http://localhost:8989"
-check_service "Radarr" "http://localhost:7878"
-check_service "Bazarr" "http://localhost:6767"
 check_service "Seerr" "http://localhost:5055"
 
 echo ""
@@ -125,66 +175,65 @@ vpn_ip=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/ip 2>/dev/null || true' 2>
 vpn_iface=$(docker exec gluetun sh -lc 'ls /sys/class/net 2>/dev/null | grep -E "^(tun|wg)[0-9]+$" | head -1' 2>/dev/null)
 vpn_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' gluetun 2>/dev/null || true)
 if [[ -n "$vpn_ip" && -n "$vpn_iface" && "$vpn_health" != "unhealthy" ]]; then
-    echo -e "  ${GREEN}OK${NC}  VPN active (IP: $vpn_ip, iface: $vpn_iface, health: ${vpn_health:-unknown})"
-    ((PASS++))
+    ok "VPN active (IP: $vpn_ip, iface: $vpn_iface, health: ${vpn_health:-unknown})"
 elif [[ -z "$vpn_ip" ]]; then
-    echo -e "  ${RED}FAIL${NC}  VPN not connected (missing /tmp/gluetun/ip)"
-    ((FAIL++))
+    fail "VPN not connected (missing /tmp/gluetun/ip)"
 elif [[ -z "$vpn_iface" ]]; then
-    echo -e "  ${RED}FAIL${NC}  VPN tunnel interface not detected in gluetun"
-    ((FAIL++))
+    fail "VPN tunnel interface not detected in gluetun"
 else
-    echo -e "  ${RED}FAIL${NC}  VPN health is unhealthy"
-    ((FAIL++))
+    fail "VPN health is unhealthy"
 fi
 
-gluetun_netns="$(get_netns_id gluetun)"
-qbittorrent_netns="$(get_netns_id qbittorrent)"
-if [[ -n "$gluetun_netns" && -n "$qbittorrent_netns" ]]; then
-    if [[ "$gluetun_netns" == "$qbittorrent_netns" ]]; then
-        echo -e "  ${GREEN}OK${NC}  qBittorrent shares gluetun network namespace ($gluetun_netns)"
-        ((PASS++))
+if [[ "$MEDIA_READY" == true ]]; then
+    gluetun_netns="$(get_netns_id gluetun)"
+    qbittorrent_netns="$(get_netns_id qbittorrent)"
+    if [[ -n "$gluetun_netns" && -n "$qbittorrent_netns" ]]; then
+        if [[ "$gluetun_netns" == "$qbittorrent_netns" ]]; then
+            ok "qBittorrent shares gluetun network namespace ($gluetun_netns)"
+        else
+            fail "qBittorrent network namespace drift (gluetun=$gluetun_netns, qbittorrent=$qbittorrent_netns)"
+            echo "       Run: docker restart qbittorrent"
+        fi
     else
-        echo -e "  ${RED}FAIL${NC}  qBittorrent network namespace drift (gluetun=$gluetun_netns, qbittorrent=$qbittorrent_netns)"
-        echo "       Run: docker restart qbittorrent"
-        ((FAIL++))
+        skip "Could not verify qBittorrent/gluetun namespace IDs"
     fi
+
+    for arr in radarr sonarr; do
+        if [[ "$(container_state "$arr")" != "running" ]]; then
+            continue
+        fi
+
+        if container_http_ok "$arr" "http://gluetun:8080"; then
+            ok "$arr can reach qBittorrent via gluetun:8080"
+        else
+            fail "$arr cannot reach qBittorrent via gluetun:8080"
+        fi
+    done
 else
-    echo -e "  ${YELLOW}SKIP${NC}  Could not verify qBittorrent/gluetun namespace IDs"
+    paused "qBittorrent namespace checks (MEDIA_DIR unavailable)"
+    paused "Arr to qBittorrent connectivity checks (MEDIA_DIR unavailable)"
 fi
-
-for arr in radarr sonarr; do
-    if [[ "$(docker inspect -f '{{.State.Status}}' "$arr" 2>/dev/null)" != "running" ]]; then
-        continue
-    fi
-
-    if container_http_ok "$arr" "http://gluetun:8080"; then
-        echo -e "  ${GREEN}OK${NC}  $arr can reach qBittorrent via gluetun:8080"
-        ((PASS++))
-    else
-        echo -e "  ${RED}FAIL${NC}  $arr cannot reach qBittorrent via gluetun:8080"
-        ((FAIL++))
-    fi
-done
 
 echo ""
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
     echo "Jellyfin:"
-    jf_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:8096/health" 2>/dev/null)
-    if [[ "$jf_status" == "200" ]]; then
-        echo -e "  ${GREEN}OK${NC}  Jellyfin (http://localhost:8096)"
-        ((PASS++))
+    if [[ "$MEDIA_READY" != true ]]; then
+        paused "Jellyfin (MEDIA_DIR unavailable)"
     else
-        echo -e "  ${YELLOW}SKIP${NC}  Jellyfin not reachable yet (may still be starting)"
+        jf_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:8096/health" 2>/dev/null)
+        if [[ "$jf_status" == "200" ]]; then
+            ok "Jellyfin (http://localhost:8096)"
+        else
+            fail "Jellyfin not reachable yet (got HTTP ${jf_status:-000})"
+        fi
     fi
 else
     echo "Plex:"
     plex_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:32400/web" 2>/dev/null)
     if [[ "$plex_status" == "200" || "$plex_status" == "302" || "$plex_status" == "301" ]]; then
-        echo -e "  ${GREEN}OK${NC}  Plex (http://localhost:32400/web)"
-        ((PASS++))
+        ok "Plex (http://localhost:32400/web)"
     else
-        echo -e "  ${YELLOW}SKIP${NC}  Plex not detected (install separately, see SETUP.md)"
+        skip "Plex not detected (install separately, see SETUP.md)"
     fi
 fi
 
@@ -196,7 +245,11 @@ echo ""
 
 if [[ $FAIL -gt 0 ]]; then
     echo "Something's not right. Check the FAIL items above."
-    echo "Most common fix: restart your container runtime (OrbStack or Docker Desktop) and wait 30 seconds."
+    if [[ "$MEDIA_READY" != true ]]; then
+        echo "Mount $MEDIA_DIR, then run: docker compose up -d qbittorrent sonarr radarr bazarr"
+    else
+        echo "Most common fix: restart your container runtime (OrbStack or Docker Desktop) and wait 30 seconds."
+    fi
     exit 1
 else
     echo "Everything looks good!"

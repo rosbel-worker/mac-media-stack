@@ -12,14 +12,15 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
-MEDIA_DIR="$HOME/Media"
-CONFIG_DIR="$HOME/home-media-stack/config"
-MEDIA_DIR_SET_BY_FLAG=false
-CONFIG_DIR_SET_BY_FLAG=false
+MEDIA_DIR_OVERRIDE=""
+CONFIG_DIR_OVERRIDE=""
 
 PASS=0
 WARN=0
 FAIL=0
+
+# shellcheck source=scripts/lib/media-path.sh
+source "$SCRIPT_DIR/scripts/lib/media-path.sh"
 
 usage() {
     cat <<EOF
@@ -41,8 +42,7 @@ while [[ $# -gt 0 ]]; do
                 echo "Missing value for --media-dir"
                 exit 1
             fi
-            MEDIA_DIR="$2"
-            MEDIA_DIR_SET_BY_FLAG=true
+            MEDIA_DIR_OVERRIDE="$2"
             shift 2
             ;;
         --config-dir)
@@ -50,8 +50,7 @@ while [[ $# -gt 0 ]]; do
                 echo "Missing value for --config-dir"
                 exit 1
             fi
-            CONFIG_DIR="$2"
-            CONFIG_DIR_SET_BY_FLAG=true
+            CONFIG_DIR_OVERRIDE="$2"
             shift 2
             ;;
         --help|-h)
@@ -66,51 +65,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$MEDIA_DIR_SET_BY_FLAG" != true ]] && [[ -f "$ENV_FILE" ]]; then
-    env_media=$(sed -n 's/^MEDIA_DIR=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_media" ]]; then
-        MEDIA_DIR="$env_media"
-    fi
+if [[ -n "$MEDIA_DIR_OVERRIDE" ]]; then
+    MEDIA_DIR="$MEDIA_DIR_OVERRIDE"
+fi
+if [[ -n "$CONFIG_DIR_OVERRIDE" ]]; then
+    CONFIG_DIR="$CONFIG_DIR_OVERRIDE"
 fi
 
-if [[ "$CONFIG_DIR_SET_BY_FLAG" != true ]] && [[ -f "$ENV_FILE" ]]; then
-    env_config=$(sed -n 's/^CONFIG_DIR=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_config" ]]; then
-        CONFIG_DIR="$env_config"
-    fi
-fi
+MEDIA_DIR="$(resolve_media_dir "$SCRIPT_DIR")"
+CONFIG_DIR="$(resolve_config_dir "$SCRIPT_DIR")"
 
-strip_wrapping_quotes() {
-    local value="$1"
-    value="${value%\"}"
-    value="${value#\"}"
-    value="${value%\'}"
-    value="${value#\'}"
-    printf '%s\n' "$value"
-}
-
-MEDIA_DIR="$(strip_wrapping_quotes "$MEDIA_DIR")"
-CONFIG_DIR="$(strip_wrapping_quotes "$CONFIG_DIR")"
-MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
-CONFIG_DIR="${CONFIG_DIR/#\~/$HOME}"
-
-# Load media server choice
-MEDIA_SERVER="plex"
-if [[ -f "$ENV_FILE" ]]; then
-    env_server=$(sed -n 's/^MEDIA_SERVER=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_server" ]]; then
-        MEDIA_SERVER="$env_server"
-    fi
-fi
-
-# Load VPN provider choice
-VPN_PROVIDER="protonvpn"
-if [[ -f "$ENV_FILE" ]]; then
-    env_vpn=$(sed -n 's/^VPN_PROVIDER=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_vpn" ]]; then
-        VPN_PROVIDER="$env_vpn"
-    fi
-fi
+MEDIA_SERVER="$(get_env_value_from_project "MEDIA_SERVER" "$SCRIPT_DIR")"
+MEDIA_SERVER="${MEDIA_SERVER:-plex}"
+VPN_PROVIDER="$(get_env_value_from_project "VPN_PROVIDER" "$SCRIPT_DIR")"
+VPN_PROVIDER="${VPN_PROVIDER:-protonvpn}"
 
 get_env_value() {
     local key="$1"
@@ -120,6 +88,15 @@ get_env_value() {
 ok() { echo -e "  ${GREEN}OK${NC}   $1"; PASS=$((PASS + 1)); }
 warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); }
 fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); }
+
+media_reason_text() {
+    case "$(media_mount_reason "$SCRIPT_DIR")" in
+        missing_mount) echo "Media mount is not present: $MEDIA_DIR" ;;
+        missing_subdirs) echo "Media mount is missing required directories under $MEDIA_DIR" ;;
+        local_path_missing) echo "Local media path is missing: $MEDIA_DIR" ;;
+        *) echo "Media path is unavailable: $MEDIA_DIR" ;;
+    esac
+}
 
 echo ""
 echo "=============================="
@@ -131,7 +108,6 @@ echo -e "  ${CYAN}Info${NC}  Media dir: $MEDIA_DIR"
 echo -e "  ${CYAN}Info${NC}  Config dir: $CONFIG_DIR"
 echo ""
 
-# Core tools
 for cmd in docker curl grep sed awk; do
     if command -v "$cmd" >/dev/null 2>&1; then
         ok "Command found: $cmd"
@@ -140,7 +116,6 @@ for cmd in docker curl grep sed awk; do
     fi
 done
 
-# Container runtime
 if docker info >/dev/null 2>&1; then
     runtime=$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || echo "Docker")
     ok "Container runtime running ($runtime)"
@@ -148,7 +123,6 @@ else
     fail "Container runtime is not running"
 fi
 
-# .env
 if [[ -f "$ENV_FILE" ]]; then
     ok ".env exists"
     if [[ "$VPN_PROVIDER" == "pia" ]]; then
@@ -219,14 +193,35 @@ else
     fail ".env is missing (run: bash scripts/setup.sh)"
 fi
 
-# Media directories
+if media_dir_requires_mount "$SCRIPT_DIR"; then
+    if media_mount_ready "$SCRIPT_DIR"; then
+        ok "Media mount is present and ready: $MEDIA_DIR"
+    else
+        fail "$(media_reason_text)"
+    fi
+else
+    if media_mount_ready "$SCRIPT_DIR"; then
+        ok "Local media path is ready: $MEDIA_DIR"
+    else
+        fail "$(media_reason_text)"
+    fi
+fi
+
 for dir in "$MEDIA_DIR" "$MEDIA_DIR/Downloads" "$MEDIA_DIR/Movies" "$MEDIA_DIR/TV Shows"; do
     if [[ -d "$dir" ]]; then
         ok "Directory exists: $dir"
     else
-        warn "Directory missing: $dir"
+        if media_dir_requires_mount "$SCRIPT_DIR"; then
+            fail "Required media directory missing on mounted path: $dir"
+        else
+            fail "Required local media directory missing: $dir"
+        fi
     fi
 done
+
+if [[ -d "$MEDIA_DIR" && ! -w "$MEDIA_DIR" ]]; then
+    warn "Media directory is not writable: $MEDIA_DIR"
+fi
 
 if [[ -d "$CONFIG_DIR" ]]; then
     ok "Directory exists: $CONFIG_DIR"
@@ -243,7 +238,6 @@ if [[ "$config_fs_type" == "smbfs" || "$config_fs_type" == "nfs" ]]; then
     warn "CONFIG_DIR is on $config_fs_type (use local disk to avoid SQLite lock errors)"
 fi
 
-# Compose render
 if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
     if docker compose -f "$SCRIPT_DIR/docker-compose.yml" config >/dev/null 2>&1; then
         ok "docker-compose.yml renders with current .env"
@@ -252,7 +246,6 @@ if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
     fi
 fi
 
-# Port checks
 PORTS=(5055 9696 8989 7878 8080 6767 8191)
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
     PORTS+=(8096)
@@ -268,7 +261,6 @@ for port in "${PORTS[@]}"; do
     fi
 done
 
-# Media server check
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
     ok "Media server: Jellyfin (runs in Docker)"
 elif [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" >/dev/null 2>&1; then

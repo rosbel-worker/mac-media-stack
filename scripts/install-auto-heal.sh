@@ -17,6 +17,7 @@ LAUNCH_DIR="$HOME/Library/LaunchAgents"
 LOG_DIR="$HOME/Library/Logs/media-stack/launchd"
 PLIST_NAME="com.media-stack.auto-heal"
 PLIST_PATH="$LAUNCH_DIR/$PLIST_NAME.plist"
+WATCH_PATHS_XML=""
 
 usage() {
     cat <<EOF
@@ -44,6 +45,17 @@ esac
 
 mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
 
+if media_dir_requires_mount "$PROJECT_DIR"; then
+    WATCH_PATHS_XML=$(cat <<EOF
+    <key>WatchPaths</key>
+    <array>
+        <string>/Volumes</string>
+        <string>$MEDIA_DIR</string>
+    </array>
+EOF
+)
+fi
+
 cat > "$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -67,6 +79,7 @@ cat > "$PLIST_PATH" <<EOF
     <integer>300</integer>
     <key>RunAtLoad</key>
     <true/>
+${WATCH_PATHS_XML}
     <key>StandardOutPath</key>
     <string>$LOG_DIR/auto-heal.out.log</string>
     <key>StandardErrorPath</key>

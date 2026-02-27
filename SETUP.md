@@ -190,6 +190,8 @@ CONFIG_DIR=/Users/YOURUSERNAME/home-media-stack/config
 
 Keep `CONFIG_DIR` on local disk. Putting app databases on SMB/NFS can cause `database is locked` errors.
 
+If `MEDIA_DIR` is under `/Volumes/...`, the full stack depends on that volume being mounted before Docker starts the media containers after a reboot. The stack now pauses mount-dependent services instead of repeatedly trying to start them against a missing mount.
+
 ### ProtonVPN (default)
 
 You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. Get your WireGuard private key from https://account.protonvpn.com/downloads#wireguard-configuration, or use the ones provided to you.
@@ -250,6 +252,8 @@ Run preflight checks before first startup:
 bash scripts/doctor.sh
 ```
 
+If you are using an external disk/share at `/Volumes/...`, this step now fails fast when that media mount is unavailable or missing the expected `Downloads`, `Movies`, or `TV Shows` folders.
+
 Then start services:
 
 ```bash
@@ -269,6 +273,8 @@ bash scripts/health-check.sh
 ```
 
 Everything should show OK. If VPN shows FAIL, double-check your VPN credentials in Step 5.
+
+If the media mount is missing, `bash scripts/health-check.sh` now reports that root cause directly and shows `qbittorrent`, `sonarr`, `radarr`, `bazarr`, and `jellyfin` as `PAUSED` instead of generic container failures.
 
 ---
 
@@ -323,7 +329,7 @@ At the end it will print your qBittorrent password and save credentials/API keys
 ---
 ## Step 9: Install Auto-Healer (Optional but Recommended)
 
-This installs a background job that checks your stack every 5 minutes. It recovers common sleep/wake issues too (VPN unhealthy, dead WebUIs, or missing bind mounts like `/tv`/`/downloads`).
+This installs a background job that checks your stack every 5 minutes. It also watches `/Volumes` for mount changes so a late media mount can trigger a faster recovery. It recovers common sleep/wake issues too (VPN unhealthy, dead WebUIs, or missing bind mounts like `/tv`/`/downloads`).
 
 ```bash
 bash scripts/install-auto-heal.sh
@@ -331,6 +337,31 @@ bash scripts/install-auto-heal.sh
 
 When your media mount is available, logs go to `<MEDIA_DIR>/logs/auto-heal.log` (default `~/Media/logs/auto-heal.log`).
 If the media mount is unavailable, fallback logs are written to `~/Library/Logs/media-stack/auto-heal.log`.
+Launchd stdout/stderr logs live under `~/Library/Logs/media-stack/launchd/`.
+
+Mount-dependent services are:
+- `qbittorrent`
+- `sonarr`
+- `radarr`
+- `bazarr`
+- `jellyfin` (when enabled)
+
+Mount-independent services are:
+- `gluetun`
+- `prowlarr`
+- `seerr`
+- `flaresolverr`
+
+If mount-dependent services remain down for 15 minutes, auto-heal sends a local macOS notification. When the stack recovers, it sends a recovery notification once.
+
+Manual recovery after the media mount returns:
+```bash
+bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
+docker compose up -d qbittorrent sonarr radarr bazarr
+# If using Jellyfin:
+docker compose --profile jellyfin up -d jellyfin
+bash scripts/health-check.sh
+```
 
 To remove it later:
 ```bash
@@ -375,6 +406,15 @@ You probably won't need these, but just in case:
 
 **Nothing is working after reboot:**
 Open OrbStack (or Docker Desktop). Wait 30 seconds. Run `bash scripts/health-check.sh`.
+
+If it says `Media mount unavailable`, mount your external media volume first, then recover the paused services:
+```bash
+bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
+docker compose up -d qbittorrent sonarr radarr bazarr
+# If using Jellyfin:
+docker compose --profile jellyfin up -d jellyfin
+bash scripts/health-check.sh
+```
 
 **VPN health check fails:**
 Double-check your VPN credentials in `.env` (WireGuard keys for ProtonVPN, or username/password for PIA). Make sure there are no extra spaces. Then restart:
