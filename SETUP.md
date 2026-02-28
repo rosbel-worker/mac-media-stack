@@ -52,6 +52,24 @@ Already on an older clone and want the newest release tag:
 bash <(curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/scripts/update-to-latest-release.sh)
 ```
 
+Use this when you want **repo code updates** from upstream release tags.
+
+Want to update only container images (keep your local branch/custom commits):
+
+```bash
+bash scripts/update-images.sh
+```
+
+Optional:
+
+```bash
+bash scripts/update-images.sh --services all
+bash scripts/update-images.sh --services qbittorrent,sonarr,radarr
+bash scripts/update-images.sh --yes
+```
+
+This image-only updater shows digest changes, asks for approval, deploys, runs health checks, auto-rolls back on failure, and auto-commits lock updates on success.
+
 ---
 
 ## Choose Your Media Server
@@ -400,6 +418,11 @@ You probably won't need these, but just in case:
 - Subtitles are auto-fetched (English)
 - If enabled, container updates happen at 4am daily (Watchtower)
 - Everything survives reboots (OrbStack or Docker Desktop + Plex auto-start)
+
+**Safe manual image updates (recommended when not using Watchtower):**
+```bash
+bash scripts/update-images.sh
+```
 ---
 
 ## Troubleshooting

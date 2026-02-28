@@ -11,21 +11,98 @@ ENV_FILE="$SCRIPT_DIR/.env"
 
 PROFILES=(autoupdate jellyfin)
 OPTIONAL_SERVICES=(watchtower jellyfin)
+SERVICES_SELECTOR="all"
+EMIT_CHANGES=""
 
-for cmd in docker awk sed mktemp; do
+usage() {
+    cat <<EOF
+Usage: bash scripts/refresh-image-lock.sh [OPTIONS]
+
+Refreshes image digests in docker-compose.yml and regenerates IMAGE_LOCK.md.
+
+Options:
+  --services VALUE   Service scope: all | running | svc1,svc2,...
+                     Default: all
+  --emit-changes PATH
+                     Write changed rows as: service|old_digest|new_digest|repo
+  --help             Show this help message
+EOF
+}
+
+fail() {
+    echo "$1"
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --services)
+            [[ $# -ge 2 ]] || fail "Missing value for --services"
+            SERVICES_SELECTOR="$2"
+            shift 2
+            ;;
+        --emit-changes)
+            [[ $# -ge 2 ]] || fail "Missing value for --emit-changes"
+            EMIT_CHANGES="$2"
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            fail "Unknown option: $1"
+            ;;
+    esac
+done
+
+for cmd in docker awk sed mktemp date; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "Missing required command: $cmd"
-        exit 1
+        fail "Missing required command: $cmd"
     fi
 done
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
-    echo "Could not find $COMPOSE_FILE"
-    exit 1
+    fail "Could not find $COMPOSE_FILE"
 fi
 
 compose() {
     docker compose "${PROFILE_ARGS[@]}" "$@"
+}
+
+image_repo_from_ref() {
+    local ref="$1"
+    local repo
+
+    repo="${ref%@*}"
+    if [[ "$repo" =~ :[^/:]+$ ]]; then
+        repo="${repo%:*}"
+    fi
+
+    printf '%s' "$repo"
+}
+
+resolve_digest_from_candidate() {
+    local candidate="$1"
+    local repo="$2"
+    local digest
+
+    digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$candidate" 2>/dev/null | awk -v repo="$repo" '
+        BEGIN { first="" }
+        {
+            if (first == "") first = $0
+            if ($0 ~ ("^" repo "@sha256:")) {
+                print $0
+                found = 1
+                exit
+            }
+        }
+        END {
+            if (!found && first != "") print first
+        }
+    ')"
+
+    printf '%s' "$digest"
 }
 
 PROFILE_ARGS=()
@@ -36,12 +113,15 @@ done
 tmp_map="$(mktemp)"
 tmp_compose="$(mktemp)"
 tmp_rendered="$(mktemp)"
+tmp_services_all="$(mktemp)"
+tmp_services_selected="$(mktemp)"
+tmp_changes="$(mktemp)"
 
 cleanup() {
     if [[ "${CREATED_ENV:-0}" == "1" ]]; then
         rm -f "$ENV_FILE"
     fi
-    rm -f "$tmp_map" "$tmp_compose" "$tmp_rendered"
+    rm -f "$tmp_map" "$tmp_compose" "$tmp_rendered" "$tmp_services_all" "$tmp_services_selected" "$tmp_changes"
 }
 trap cleanup EXIT
 
@@ -52,7 +132,55 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 compose config > "$tmp_rendered"
+compose config --services > "$tmp_services_all"
+
+if [[ ! -s "$tmp_services_all" ]]; then
+    fail "Failed to resolve compose services."
+fi
+
+resolve_selected_services() {
+    local running_service requested service_raw service
+
+    : > "$tmp_services_selected"
+
+    case "$SERVICES_SELECTOR" in
+        all)
+            cat "$tmp_services_all" > "$tmp_services_selected"
+            ;;
+        running)
+            while IFS= read -r running_service; do
+                [[ -n "$running_service" ]] || continue
+                if grep -Fxq "$running_service" "$tmp_services_all"; then
+                    echo "$running_service" >> "$tmp_services_selected"
+                fi
+            done < <(compose ps --services --status running 2>/dev/null || true)
+            ;;
+        *)
+            IFS=',' read -r -a requested <<< "$SERVICES_SELECTOR"
+            for service_raw in "${requested[@]}"; do
+                service="$(printf '%s' "$service_raw" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+                [[ -n "$service" ]] || continue
+
+                if ! grep -Fxq "$service" "$tmp_services_all"; then
+                    fail "Unknown service in --services: $service"
+                fi
+
+                if ! grep -Fxq "$service" "$tmp_services_selected" 2>/dev/null; then
+                    echo "$service" >> "$tmp_services_selected"
+                fi
+            done
+            ;;
+    esac
+
+    if [[ ! -s "$tmp_services_selected" ]]; then
+        fail "No services selected with --services=$SERVICES_SELECTOR"
+    fi
+}
+
+resolve_selected_services
+
 while IFS= read -r service; do
+    [[ -n "$service" ]] || continue
     image_ref="$(awk -v svc="$service" '
         $0 ~ ("^  " svc ":$") { in_service=1; next }
         in_service && $0 ~ /^    image:[[:space:]]+/ {
@@ -65,29 +193,45 @@ while IFS= read -r service; do
     ' "$tmp_rendered")"
 
     if [[ -z "$image_ref" ]]; then
-        echo "Could not resolve image for service: $service"
-        exit 1
+        fail "Could not resolve image for service: $service"
     fi
     echo "$service|$image_ref" >> "$tmp_map"
-done < <(compose config --services)
+done < "$tmp_services_all"
 
 if [[ ! -s "$tmp_map" ]]; then
-    echo "Failed to parse service images from compose config."
-    exit 1
+    fail "Failed to parse service images from compose config."
 fi
 
-while IFS='|' read -r service image_ref; do
-    repo="${image_ref%@*}"
+while IFS= read -r service; do
+    [[ -n "$service" ]] || continue
+
+    image_ref="$(awk -F'|' -v svc="$service" '$1 == svc { print $2; exit }' "$tmp_map")"
+    if [[ -z "$image_ref" ]]; then
+        fail "Could not resolve current image digest for service: $service"
+    fi
+
+    repo="$(image_repo_from_ref "$image_ref")"
     candidate="${repo}:latest"
     echo "Refreshing $service ($candidate)"
     docker pull "$candidate" >/dev/null
-    digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$candidate")"
+
+    digest="$(resolve_digest_from_candidate "$candidate" "$repo")"
     if [[ -z "$digest" ]]; then
-        echo "Failed to resolve digest for $candidate"
-        exit 1
+        fail "Failed to resolve digest for $candidate"
     fi
-    sed -i '' -E "s#^${service}\\|.*#${service}|${digest}#" "$tmp_map"
-done < "$tmp_map"
+
+    if [[ "$image_ref" != "$digest" ]]; then
+        echo "$service|$image_ref|$digest|$repo" >> "$tmp_changes"
+    fi
+
+    tmp_map_next="$(mktemp)"
+    awk -F'|' -v svc="$service" -v dig="$digest" '
+        BEGIN { OFS="|" }
+        $1 == svc { $2 = dig }
+        { print }
+    ' "$tmp_map" > "$tmp_map_next"
+    mv "$tmp_map_next" "$tmp_map"
+done < "$tmp_services_selected"
 
 awk -F'|' '
     NR==FNR { lock[$1]=$2; next }
@@ -138,12 +282,17 @@ date_utc="$(date -u +%F)"
     echo
     echo "Run:"
     echo "\`\`\`bash"
-    echo "bash scripts/refresh-image-lock.sh"
+    echo "bash scripts/refresh-image-lock.sh --services all"
     echo "\`\`\`"
     echo
     echo "Then smoke test the stack and commit the updated lock files."
 } > "$LOCK_FILE"
 
+if [[ -n "$EMIT_CHANGES" ]]; then
+    cp "$tmp_changes" "$EMIT_CHANGES"
+fi
+
 echo "Updated:"
 echo "  - $COMPOSE_FILE"
 echo "  - $LOCK_FILE"
+echo "Service selector: $SERVICES_SELECTOR"

@@ -97,6 +97,34 @@ Local script (once present):
 bash scripts/update-to-latest-release.sh
 ```
 
+Use this when you want **repo code updates** (scripts/docs/compose defaults) from upstream release tags.
+
+## Image-Only Update (Safe/Manual)
+
+Want to refresh only container images while keeping your local branch/custom commits intact?
+
+```bash
+bash scripts/update-images.sh
+```
+
+Optional:
+
+```bash
+bash scripts/update-images.sh --services all
+bash scripts/update-images.sh --services qbittorrent,sonarr,radarr
+bash scripts/update-images.sh --yes
+```
+
+What it does:
+- Refreshes pinned digests for selected services (`running` by default)
+- Shows digest changes and available source/changelog links before applying
+- Asks for approval (`Approve image update? [y/N]`)
+- Deploys and runs `scripts/health-check.sh`
+- Auto-rolls back to previous digests if deploy/health-check fails
+- Auto-commits `docker-compose.yml` and `IMAGE_LOCK.md` on success
+
+Use this when you want **image updates only** without changing your branch to upstream release tags.
+
 <details>
 <summary>See it in action</summary>
 <br>
@@ -186,7 +214,8 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift, pauses mount-dependent services, and alerts after 15 minutes of downtime) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd, with mount watch paths for faster resume |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
-| `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |
+| `scripts/update-images.sh` | Safe image-only updater with approval gate, health-check, rollback, and auto-commit |
+| `scripts/refresh-image-lock.sh` | Low-level digest refresher (used by `scripts/update-images.sh`) |
 
 Local path/runbook reference is generated at `~/home-media-stack/README.md` each time `scripts/setup.sh` runs.
 
