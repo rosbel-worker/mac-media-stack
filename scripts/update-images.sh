@@ -97,7 +97,7 @@ add_selected_service() {
     fi
 
     SELECTED_SERVICES+=("$candidate")
-    ((SELECTED_COUNT++))
+    ((SELECTED_COUNT += 1))
 }
 
 resolve_selected_services() {
