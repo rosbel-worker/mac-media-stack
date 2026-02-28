@@ -12,6 +12,7 @@ NC='\033[0m'
 ASSUME_YES=false
 SERVICES_SELECTOR="running"
 PROFILES=(autoupdate jellyfin)
+SELECTED_COUNT=0
 
 usage() {
     cat <<EOF
@@ -87,20 +88,25 @@ add_selected_service() {
     local candidate="$1"
     local existing
 
-    for existing in "${SELECTED_SERVICES[@]}"; do
-        if [[ "$existing" == "$candidate" ]]; then
-            return 0
-        fi
-    done
+    if [[ "$SELECTED_COUNT" -gt 0 ]]; then
+        for existing in "${SELECTED_SERVICES[@]}"; do
+            if [[ "$existing" == "$candidate" ]]; then
+                return 0
+            fi
+        done
+    fi
 
     SELECTED_SERVICES+=("$candidate")
+    ((SELECTED_COUNT++))
 }
 
 resolve_selected_services() {
     local running_service service_raw service
     local requested=()
 
+    unset SELECTED_SERVICES
     SELECTED_SERVICES=()
+    SELECTED_COUNT=0
 
     case "$SERVICES_SELECTOR" in
         running)
@@ -110,7 +116,7 @@ resolve_selected_services() {
                     add_selected_service "$running_service"
                 fi
             done < <(compose ps --services --status running 2>/dev/null || true)
-            if [[ "${#SELECTED_SERVICES[@]}" -eq 0 ]]; then
+            if [[ "$SELECTED_COUNT" -eq 0 ]]; then
                 fail "No running services found for --services=running"
             fi
             ;;
@@ -131,7 +137,7 @@ resolve_selected_services() {
                 fi
                 add_selected_service "$service"
             done
-            if [[ "${#SELECTED_SERVICES[@]}" -eq 0 ]]; then
+            if [[ "$SELECTED_COUNT" -eq 0 ]]; then
                 fail "No valid services selected via --services=$SERVICES_SELECTOR"
             fi
             ;;
