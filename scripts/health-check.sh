@@ -91,6 +91,25 @@ container_http_ok() {
     [[ "$code" =~ ^(200|301|302|307|308|401|403)$ ]]
 }
 
+qbittorrent_setting() {
+    local key="$1"
+    docker exec qbittorrent sh -lc "sed -n 's/^${key}=//p' /config/qBittorrent/qBittorrent.conf | tail -1" 2>/dev/null \
+        | tr -d '\r'
+}
+
+gluetun_forwarded_port() {
+    local port
+
+    port=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/forwarded_port 2>/dev/null || true' 2>/dev/null | tr -d '\r')
+    if [[ "$port" =~ ^[0-9]+$ && "$port" != "0" ]]; then
+        printf '%s\n' "$port"
+        return 0
+    fi
+
+    docker exec gluetun sh -lc "sed -n 's/.*\"port\":\\([0-9][0-9]*\\).*/\\1/p' /gluetun/piaportforward.json 2>/dev/null | head -1" 2>/dev/null \
+        | tr -d '\r'
+}
+
 mount_reason_text() {
     case "$MEDIA_MOUNT_REASON" in
         missing_mount) echo "Media mount unavailable: $MEDIA_DIR" ;;
@@ -187,6 +206,9 @@ fi
 if [[ "$MEDIA_READY" == true ]]; then
     gluetun_netns="$(get_netns_id gluetun)"
     qbittorrent_netns="$(get_netns_id qbittorrent)"
+    qb_bind_iface="$(qbittorrent_setting 'Session\\Interface')"
+    qb_bind_port="$(qbittorrent_setting 'Session\\Port')"
+    forwarded_port="$(gluetun_forwarded_port)"
     if [[ -n "$gluetun_netns" && -n "$qbittorrent_netns" ]]; then
         if [[ "$gluetun_netns" == "$qbittorrent_netns" ]]; then
             ok "qBittorrent shares gluetun network namespace ($gluetun_netns)"
@@ -196,6 +218,18 @@ if [[ "$MEDIA_READY" == true ]]; then
         fi
     else
         skip "Could not verify qBittorrent/gluetun namespace IDs"
+    fi
+
+    if [[ -z "$qb_bind_iface" || -z "$qb_bind_port" ]]; then
+        skip "Could not read qBittorrent bind settings"
+    elif [[ "$qb_bind_iface" != "$vpn_iface" || "$qb_bind_port" == "0" ]]; then
+        fail "qBittorrent bind drift detected (iface=${qb_bind_iface:-unknown}, port=${qb_bind_port:-unknown}, expected iface=$vpn_iface)"
+        echo "       Run: bash scripts/auto-heal.sh"
+    elif [[ -n "$forwarded_port" && "$qb_bind_port" != "$forwarded_port" ]]; then
+        fail "qBittorrent bound to $qb_bind_iface:$qb_bind_port but gluetun cached forwarded port is $forwarded_port"
+        echo "       Run: bash scripts/auto-heal.sh"
+    else
+        ok "qBittorrent bound to VPN interface $qb_bind_iface:$qb_bind_port"
     fi
 
     for arr in radarr sonarr; do

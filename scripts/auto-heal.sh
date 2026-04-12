@@ -292,6 +292,58 @@ wait_for_qbittorrent() {
     return 1
 }
 
+qbittorrent_setting() {
+    local key="$1"
+    docker exec qbittorrent sh -lc "sed -n 's/^${key}=//p' /config/qBittorrent/qBittorrent.conf | tail -1" 2>/dev/null \
+        | tr -d '\r'
+}
+
+get_qbittorrent_interface() {
+    qbittorrent_setting 'Session\\Interface'
+}
+
+get_qbittorrent_port() {
+    qbittorrent_setting 'Session\\Port'
+}
+
+get_gluetun_forwarded_port() {
+    local port
+
+    port=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/forwarded_port 2>/dev/null || true' 2>/dev/null | tr -d '\r')
+    if [[ "$port" =~ ^[0-9]+$ && "$port" != "0" ]]; then
+        printf '%s\n' "$port"
+        return 0
+    fi
+
+    docker exec gluetun sh -lc "sed -n 's/.*\"port\":\\([0-9][0-9]*\\).*/\\1/p' /gluetun/piaportforward.json 2>/dev/null | head -1" 2>/dev/null \
+        | tr -d '\r'
+}
+
+repair_qbittorrent_binding() {
+    local vpn_iface="$1"
+    local forwarded_port="$2"
+    local qb_iface qb_port
+
+    if [[ -z "$vpn_iface" || ! "$forwarded_port" =~ ^[0-9]+$ || "$forwarded_port" == "0" ]]; then
+        return 1
+    fi
+
+    log "WARN: Rebinding qBittorrent to ${vpn_iface}:${forwarded_port}"
+    if docker exec gluetun sh -lc "wget -qO- --post-data 'json={\"listen_port\":${forwarded_port},\"current_network_interface\":\"${vpn_iface}\",\"random_port\":false,\"upnp\":false}' http://127.0.0.1:8080/api/v2/app/setPreferences >/dev/null" >/dev/null 2>&1; then
+        sleep 3
+        qb_iface="$(get_qbittorrent_interface)"
+        qb_port="$(get_qbittorrent_port)"
+        if [[ "$qb_iface" == "$vpn_iface" && "$qb_port" == "$forwarded_port" ]]; then
+            log "OK: qBittorrent rebound to ${vpn_iface}:${forwarded_port}"
+            ((HEALED++))
+            return 0
+        fi
+    fi
+
+    log "WARN: qBittorrent rebind did not stick (iface=${qb_iface:-unknown}, port=${qb_port:-unknown})"
+    return 1
+}
+
 format_duration() {
     local total_seconds="$1"
     local hours minutes seconds
@@ -572,6 +624,37 @@ if [[ "$MEDIA_READY" == true ]]; then
         recreate_service qbittorrent
         sleep 8
         wait_for_qbittorrent
+    fi
+
+    if [[ "$(container_state qbittorrent)" == "running" ]]; then
+        qb_bind_iface="$(get_qbittorrent_interface)"
+        qb_bind_port="$(get_qbittorrent_port)"
+        forwarded_port="$(get_gluetun_forwarded_port)"
+
+        if [[ -z "$qb_bind_iface" || -z "$qb_bind_port" || "$qb_bind_iface" != "$vpn_iface" || "$qb_bind_port" == "0" || ( -n "$forwarded_port" && "$qb_bind_port" != "$forwarded_port" ) ]]; then
+            log "WARN: qBittorrent bind drift detected (iface=${qb_bind_iface:-unknown}, port=${qb_bind_port:-unknown}, expected_iface=${vpn_iface:-unknown}, forwarded_port=${forwarded_port:-unknown})"
+            if [[ -n "$vpn_iface" && -n "$forwarded_port" ]]; then
+                if ! repair_qbittorrent_binding "$vpn_iface" "$forwarded_port"; then
+                    recreate_service qbittorrent
+                    sleep 8
+                    qb_bind_iface="$(get_qbittorrent_interface)"
+                    qb_bind_port="$(get_qbittorrent_port)"
+                    if [[ "$qb_bind_iface" == "$vpn_iface" && "$qb_bind_port" == "$forwarded_port" ]]; then
+                        log "OK: qBittorrent recreate restored binding to $qb_bind_iface:$qb_bind_port"
+                    else
+                        log "ERROR: qBittorrent bind still drifted after recreate (iface=${qb_bind_iface:-unknown}, port=${qb_bind_port:-unknown})"
+                        ((FAILED++))
+                        record_degraded_service "qbittorrent"
+                    fi
+                fi
+            else
+                log "ERROR: Cannot repair qBittorrent bind drift without a VPN interface and forwarded port"
+                ((FAILED++))
+                record_degraded_service "qbittorrent"
+            fi
+        else
+            log "OK: qBittorrent bound to ${qb_bind_iface}:${qb_bind_port}"
+        fi
     fi
 else
     log "WARN: Skipping qBittorrent namespace and HTTP checks because media mount is not ready"
