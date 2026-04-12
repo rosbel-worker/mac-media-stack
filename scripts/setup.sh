@@ -141,6 +141,7 @@ docker compose logs --tail 100 gluetun qbittorrent radarr sonarr seerr
 bash scripts/doctor.sh --media-dir "$MEDIA_DIR" --config-dir "$CONFIG_DIR"
 bash scripts/health-check.sh
 bash scripts/configure.sh
+bash scripts/expose-tailnet.sh
 \`\`\`
 
 ## VPN Egress Check (qBittorrent via Gluetun)
@@ -360,4 +361,5 @@ echo "  2. Run: docker compose up -d"
 echo "     (or: docker compose --profile jellyfin up -d if MEDIA_SERVER=jellyfin)"
 echo "  3. Run: bash scripts/health-check.sh"
 echo "  4. Follow the rest of SETUP.md for Plex + app configuration"
+echo "  5. Optional: Run bash scripts/expose-tailnet.sh for private Tailscale access"
 echo ""

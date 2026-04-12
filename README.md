@@ -27,7 +27,7 @@
 There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of them dump a compose file and leave you to figure out the rest. This one is different:
 
 - **One command to install.** Clone, configure, and start everything with a single `curl | bash`. No 45-minute manual setup.
-- **Auto-configures itself.** The configure script wires up Radarr, Sonarr, Prowlarr, Seerr, and qBittorrent via their APIs. No clicking through 6 different web UIs.
+- **Auto-configures itself.** The configure script wires up Radarr, Sonarr, Prowlarr, Seerr, Bazarr, and qBittorrent. No clicking through 6 different web UIs.
 - **Built for macOS.** Native paths, launchd instead of systemd, OrbStack or Docker Desktop instead of bare Docker. Not a Linux guide with "should work on Mac" in the footnotes.
 - **Self-healing.** Hourly health checks restart anything that goes down. VPN drops, container crashes, stalled downloads — handled automatically.
 
@@ -203,6 +203,14 @@ Pinned digest matrix: [IMAGE_LOCK.md](IMAGE_LOCK.md)
 
 By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEERR_BIND_IP=0.0.0.0` in `.env` only if you intentionally want LAN exposure.
 
+If you use Tailscale, keep the local-only bind and publish the running UIs privately to your tailnet instead:
+
+```bash
+bash scripts/expose-tailnet.sh
+```
+
+The helper uses `tailscale serve`, exposes the detected media-stack web UIs on your node's `*.ts.net` hostname, and leaves LAN access disabled. If Serve/HTTPS has not been enabled for your tailnet yet, the script prints the one-time approval URL.
+
 ## Scripts
 
 | Script | Purpose |
@@ -213,6 +221,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/health-check.sh` | Checks if everything is running correctly and reports paused services when `MEDIA_DIR` is unavailable |
 | `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift, pauses mount-dependent services, and alerts after 15 minutes of downtime) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd, with mount watch paths for faster resume |
+| `scripts/expose-tailnet.sh` | Publishes the running localhost-bound web UIs to your Tailscale tailnet with `tailscale serve` |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/update-images.sh` | Safe image-only updater with approval gate, health-check, rollback, and auto-commit |
 | `scripts/refresh-image-lock.sh` | Low-level digest refresher (used by `scripts/update-images.sh`) |

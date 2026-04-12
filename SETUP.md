@@ -210,6 +210,14 @@ Keep `CONFIG_DIR` on local disk. Putting app databases on SMB/NFS can cause `dat
 
 If `MEDIA_DIR` is under `/Volumes/...`, the full stack depends on that volume being mounted before Docker starts the media containers after a reboot. The stack now pauses mount-dependent services instead of repeatedly trying to start them against a missing mount.
 
+If you use Tailscale and want private remote access, keep the Docker binds on `127.0.0.1` and publish the web UIs later with:
+
+```bash
+bash scripts/expose-tailnet.sh
+```
+
+That uses `tailscale serve`, so you get tailnet-only access without opening these UIs to your LAN.
+
 ### ProtonVPN (default)
 
 You need two values from your ProtonVPN account: a **WireGuard Private Key** and a **WireGuard Address**. Get your WireGuard private key from https://account.protonvpn.com/downloads#wireguard-configuration, or use the ones provided to you.
@@ -337,7 +345,7 @@ bash scripts/configure.sh
 The script will:
 - Configure the download client (qBittorrent) with the right settings
 - Set up all the search indexers (where to find movies/shows)
-- Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
+- Connect everything together (Prowlarr, Radarr, Sonarr, Seerr, Bazarr)
 - Apply valid Radarr/Sonarr/Prowlarr authentication defaults (`forms` + local bypass) to avoid first-run auth prompts
 - Ensure Arr download category folders exist and validate Prowlarr indexer priorities for current API rules
 - Ask you to sign in to Seerr with Plex or Jellyfin (one browser step)
@@ -403,6 +411,14 @@ rm ~/Library/LaunchAgents/com.media-stack.auto-heal.plist
 | Seerr (browse/request) | http://localhost:5055 |
 | Plex (watch) | http://localhost:32400/web |
 | Jellyfin (watch) | http://localhost:8096 |
+
+Optional private tailnet access:
+
+```bash
+bash scripts/expose-tailnet.sh
+```
+
+This publishes the currently running UIs on your node's `*.ts.net` hostname over Tailscale. If your tailnet has not enabled Serve/HTTPS yet, the script prints the approval URL you need to open once.
 
 You probably won't need these, but just in case:
 

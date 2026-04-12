@@ -344,6 +344,110 @@ get_api_key() {
     return 1
 }
 
+configure_bazarr_settings() {
+    local bazarr_config="$CONFIG_DIR/bazarr/config/config.yaml"
+
+    if [[ ! -f "$bazarr_config" ]]; then
+        warn "Bazarr config not found at $bazarr_config; skipping Bazarr auto-configuration"
+        return 0
+    fi
+
+    if python3 - "$bazarr_config" "$RADARR_KEY" "$SONARR_KEY" <<'PY'
+import sys
+
+path, radarr_key, sonarr_key = sys.argv[1:4]
+
+with open(path, "r", encoding="utf-8") as f:
+    lines = f.read().splitlines()
+
+section = None
+changed = False
+
+for i, line in enumerate(lines):
+    if line and not line.startswith(" ") and line.endswith(":"):
+        section = line[:-1]
+        continue
+
+    if section == "general":
+        if line.startswith("  use_radarr:") and line != "  use_radarr: true":
+            lines[i] = "  use_radarr: true"
+            changed = True
+        elif line.startswith("  use_sonarr:") and line != "  use_sonarr: true":
+            lines[i] = "  use_sonarr: true"
+            changed = True
+
+    elif section == "radarr":
+        if line.startswith("  ip:") and line != "  ip: radarr":
+            lines[i] = "  ip: radarr"
+            changed = True
+        elif line.startswith("  apikey:") and line != f"  apikey: {radarr_key}":
+            lines[i] = f"  apikey: {radarr_key}"
+            changed = True
+        elif line.startswith("  ssl:") and line != "  ssl: false":
+            lines[i] = "  ssl: false"
+            changed = True
+        elif line.startswith("  base_url:") and line != "  base_url: /":
+            lines[i] = "  base_url: /"
+            changed = True
+
+    elif section == "sonarr":
+        if line.startswith("  ip:") and line != "  ip: sonarr":
+            lines[i] = "  ip: sonarr"
+            changed = True
+        elif line.startswith("  apikey:") and line != f"  apikey: {sonarr_key}":
+            lines[i] = f"  apikey: {sonarr_key}"
+            changed = True
+        elif line.startswith("  ssl:") and line != "  ssl: false":
+            lines[i] = "  ssl: false"
+            changed = True
+        elif line.startswith("  base_url:") and line != "  base_url: /":
+            lines[i] = "  base_url: /"
+            changed = True
+
+if changed:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print("updated")
+else:
+    print("unchanged")
+PY
+    then
+        local py_result
+        py_result=$(python3 - "$bazarr_config" "$RADARR_KEY" "$SONARR_KEY" <<'PY'
+import sys
+
+path, radarr_key, sonarr_key = sys.argv[1:4]
+
+with open(path, "r", encoding="utf-8") as f:
+    content = f.read()
+
+checks = [
+    "use_radarr: true" in content,
+    "use_sonarr: true" in content,
+    f"radarr:\n  apikey: {radarr_key}" in content or f"apikey: {radarr_key}" in content,
+    f"sonarr:\n  apikey: {sonarr_key}" in content or f"apikey: {sonarr_key}" in content,
+]
+
+print("ok" if all(checks) else "partial")
+PY
+)
+        if [[ "$py_result" == "ok" ]]; then
+            log "Bazarr linked to Radarr/Sonarr settings"
+        else
+            warn "Bazarr settings updated, but verification was partial"
+        fi
+    else
+        warn "Bazarr auto-configuration failed; configure manually in Bazarr UI"
+        return 0
+    fi
+
+    if docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart bazarr >/dev/null 2>&1; then
+        log "Bazarr restarted to apply settings"
+    else
+        warn "Could not restart Bazarr automatically; run: docker compose restart bazarr"
+    fi
+}
+
 # ============================================================
 # Start
 # ============================================================
@@ -360,7 +464,7 @@ echo ""
 # 1. Wait for all services to be ready
 # ============================================================
 
-echo -e "${CYAN}[1/6] Waiting for services to start...${NC}"
+echo -e "${CYAN}[1/7] Waiting for services to start...${NC}"
 echo ""
 
 wait_for_service "qBittorrent" "http://localhost:8080"
@@ -377,7 +481,7 @@ echo ""
 # 2. Extract API keys
 # ============================================================
 
-echo -e "${CYAN}[2/6] Reading API keys...${NC}"
+echo -e "${CYAN}[2/7] Reading API keys...${NC}"
 echo ""
 
 RADARR_KEY=$(get_api_key "radarr")
@@ -395,7 +499,7 @@ echo ""
 # 3. Configure qBittorrent
 # ============================================================
 
-echo -e "${CYAN}[3/6] Configuring qBittorrent...${NC}"
+echo -e "${CYAN}[3/7] Configuring qBittorrent...${NC}"
 echo ""
 
 # Get temporary password from logs
@@ -447,6 +551,7 @@ else
             \"max_ratio_act\": 0,
             \"up_limit\": 1024,
             \"save_path\": \"/downloads/complete\",
+            \"use_category_paths_in_manual_mode\": true,
             \"temp_path_enabled\": true,
             \"temp_path\": \"/downloads/incomplete\",
             \"preallocate_all\": false,
@@ -483,7 +588,7 @@ echo ""
 # 4. Configure Radarr & Sonarr
 # ============================================================
 
-echo -e "${CYAN}[4/6] Configuring Radarr & Sonarr...${NC}"
+echo -e "${CYAN}[4/7] Configuring Radarr & Sonarr...${NC}"
 echo ""
 
 configure_arr_host_auth "Radarr" "http://localhost:7878" "$RADARR_KEY"
@@ -569,7 +674,7 @@ echo ""
 # 5. Configure Prowlarr
 # ============================================================
 
-echo -e "${CYAN}[5/6] Configuring Prowlarr...${NC}"
+echo -e "${CYAN}[5/7] Configuring Prowlarr...${NC}"
 echo ""
 
 configure_prowlarr_host_auth "Prowlarr" "http://localhost:9696" "$PROWLARR_KEY"
@@ -776,7 +881,7 @@ echo ""
 # 6. Configure Seerr
 # ============================================================
 
-echo -e "${CYAN}[6/6] Configuring Seerr...${NC}"
+echo -e "${CYAN}[6/7] Configuring Seerr...${NC}"
 echo ""
 if [[ "$NON_INTERACTIVE" == true ]]; then
     if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
@@ -910,6 +1015,16 @@ else
         warn "Could not mark Seerr setup as initialized; you may still see the setup wizard."
     fi
 fi
+
+echo ""
+
+# ============================================================
+# 7. Configure Bazarr
+# ============================================================
+
+echo -e "${CYAN}[7/7] Configuring Bazarr...${NC}"
+echo ""
+configure_bazarr_settings
 
 echo ""
 
