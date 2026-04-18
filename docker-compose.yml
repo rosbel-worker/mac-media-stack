@@ -1,6 +1,6 @@
 services:
   gluetun:
-    image: qmcgaw/gluetun@sha256:d26d95d9158cb1cd793821bf9f0eb62c447f370925b274484a70044015e91284
+    image: qmcgaw/gluetun@sha256:4f1ecfedd717bca7b2d94b405380a717bcf40ba723d82a69428d816744664542
     container_name: gluetun
     # NET_ADMIN capability required for VPN to modify kernel network routing tables
     cap_add:
@@ -15,12 +15,18 @@ services:
       - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
       - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
       - TZ=${TIMEZONE:-America/New_York}
+    healthcheck:
+      test: ["CMD-SHELL", "/gluetun-entrypoint healthcheck"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 6
     ports:
       - ${QBITTORRENT_BIND_IP:-127.0.0.1}:8080:8080    # qbittorrent webui
     restart: unless-stopped
 
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent@sha256:065792d2b11f0facff340210fc1cf13623b029a94ecdf08b02d06d922205f618
+    image: lscr.io/linuxserver/qbittorrent@sha256:1fc78c81850d658f17701bfa9d8de58ccc12ff27d36a9a176c6299e55aaf4b4e
     container_name: qbittorrent
     network_mode: "service:gluetun"
     depends_on:
@@ -43,7 +49,7 @@ services:
     restart: unless-stopped
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr@sha256:e74a1e093dcc223d671d4b7061e2b4946f1989a4d3059654ff4e623b731c9134
+    image: lscr.io/linuxserver/prowlarr@sha256:35f48abb3e976fcf077fae756866c582e4a90f8b24810ae4067b3558f7cdbbdf
     container_name: prowlarr
     environment:
       - PUID=${PUID:-501}
@@ -61,7 +67,7 @@ services:
     restart: unless-stopped
 
   sonarr:
-    image: lscr.io/linuxserver/sonarr@sha256:37be832b78548e3f55f69c45b50e3b14d18df1b6def2a4994258217e67efb1a1
+    image: lscr.io/linuxserver/sonarr@sha256:6854df9de20b8c82e1982604f39473d64dbb4c4584b1013f18f9ade1ee92af13
     container_name: sonarr
     environment:
       - PUID=${PUID:-501}
@@ -81,7 +87,7 @@ services:
     restart: unless-stopped
 
   radarr:
-    image: lscr.io/linuxserver/radarr@sha256:6d3e68474ea146f995af98d3fb2cb1a14e2e4457ddaf035aa5426889e2f9249c
+    image: lscr.io/linuxserver/radarr@sha256:6f1dda18354ea7f28cead8f6d099fc8222498c3ae165f567d504ed04d70980d7
     container_name: radarr
     environment:
       - PUID=${PUID:-501}
@@ -101,7 +107,7 @@ services:
     restart: unless-stopped
 
   bazarr:
-    image: lscr.io/linuxserver/bazarr@sha256:b0bc617664dbca25845ac3b1bb6411b145b6a44a6d173071c9d2f426524fdd9f
+    image: lscr.io/linuxserver/bazarr@sha256:d736df5df0286373a26d34f47aa413cb8aeada74f6338dac372a6d37ba1b3b0d
     container_name: bazarr
     environment:
       - PUID=${PUID:-501}
@@ -132,7 +138,7 @@ services:
     restart: unless-stopped
 
   seerr:
-    image: ghcr.io/seerr-team/seerr@sha256:b35ba0461c4a1033d117ac1e5968fd4cbe777899e4cbfbdeaf3d10a42a0eb7e9
+    image: ghcr.io/seerr-team/seerr@sha256:d535391db3b5a22ce02241e6d7a50ca714e75d927e46aa20456b77fa051cbf52
     container_name: seerr
     init: true
     environment:
@@ -143,27 +149,6 @@ services:
       - ${SEERR_BIND_IP:-127.0.0.1}:5055:5055
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5055/api/v1/status').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  jellyfin:
-    image: lscr.io/linuxserver/jellyfin@sha256:ba3773e77f0bf571e44cb2aad028f240cfac6b1bb261634c5762992995b50b89
-    container_name: jellyfin
-    profiles: ["jellyfin"]
-    environment:
-      - PUID=${PUID:-501}
-      - PGID=${PGID:-20}
-      - TZ=${TIMEZONE:-America/New_York}
-    volumes:
-      - ${CONFIG_DIR}/jellyfin:/config
-      - ${MEDIA_DIR}/Movies:/data/movies
-      - ${MEDIA_DIR}/TV Shows:/data/tvshows
-    ports:
-      - 127.0.0.1:8096:8096
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8096/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
