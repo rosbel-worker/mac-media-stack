@@ -190,8 +190,8 @@ If the media mount is missing after a reboot, mount-dependent services (`qbittor
 Manual recovery after the mount returns:
 
 ```bash
-bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
 bash scripts/mount-media-share.sh
+bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
 docker compose up -d qbittorrent sonarr radarr bazarr
 # if MEDIA_SERVER=jellyfin in .env:
 docker compose --profile jellyfin up -d jellyfin
@@ -215,9 +215,9 @@ By default, service web UIs are bound to `127.0.0.1` for safer local-only access
 | `scripts/health-check.sh` | Checks if everything is running correctly and reports paused services when `MEDIA_DIR` is unavailable |
 | `scripts/auto-heal.sh` | Self-healer (runs every 5 min; repairs VPN/container/mount drift, pauses mount-dependent services, and alerts after 15 minutes of downtime) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd, with mount watch paths for faster resume |
+| `scripts/mount-media-share.sh` | Manually mount `MEDIA_SHARE_URL` and wait for `MEDIA_DIR` to become ready |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/update-images.sh` | Safe image-only updater with approval gate, health-check, rollback, and auto-commit |
-| `scripts/mount-media-share.sh` | Manually mount `MEDIA_SHARE_URL` and wait for `MEDIA_DIR` to become ready |
 | `scripts/refresh-image-lock.sh` | Low-level digest refresher (used by `scripts/update-images.sh`) |
 
 When changing web UI exposure, prefer editing `.env` bind variables (for example `SONARR_BIND_IP=0.0.0.0`) and then redeploying with `docker compose up -d` followed by `bash scripts/health-check.sh`.
