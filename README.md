@@ -155,12 +155,13 @@ Example:
 
 ```env
 MEDIA_DIR=/Volumes/media
+MEDIA_SHARE_URL=smb://YOURUSERNAME@nas.local/media
 CONFIG_DIR=/Users/YOURUSERNAME/home-media-stack/config
 ```
 
 Using SMB/NFS for `CONFIG_DIR` can cause SQLite `database is locked` errors.
 
-If `MEDIA_DIR` lives under `/Volumes/...`, make sure that volume is mounted before expecting the full stack to come up after a reboot. `restart: unless-stopped` is not enough on its own on macOS because Docker can start before the media volume is available.
+If `MEDIA_DIR` lives under `/Volumes/...`, set `MEDIA_SHARE_URL` to the SMB share URL and keep the password in macOS Keychain. The auto-healer can then attempt the mount on login/reboot before it resumes the paused services. `restart: unless-stopped` is not enough on its own on macOS because Docker can start before the media volume is available.
 
 ## Manual Quick Start
 
@@ -190,6 +191,7 @@ Manual recovery after the mount returns:
 
 ```bash
 bash scripts/doctor.sh --media-dir /Volumes/media --config-dir ~/home-media-stack/config
+bash scripts/mount-media-share.sh
 docker compose up -d qbittorrent sonarr radarr bazarr
 # if MEDIA_SERVER=jellyfin in .env:
 docker compose --profile jellyfin up -d jellyfin
@@ -215,6 +217,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd, with mount watch paths for faster resume |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/update-images.sh` | Safe image-only updater with approval gate, health-check, rollback, and auto-commit |
+| `scripts/mount-media-share.sh` | Manually mount `MEDIA_SHARE_URL` and wait for `MEDIA_DIR` to become ready |
 | `scripts/refresh-image-lock.sh` | Low-level digest refresher (used by `scripts/update-images.sh`) |
 
 Local path/runbook reference is generated at `~/home-media-stack/README.md` each time `scripts/setup.sh` runs.

@@ -39,6 +39,11 @@ resolve_config_dir() {
     resolve_path_from_env_file "CONFIG_DIR" "$HOME/home-media-stack/config" "$project_dir"
 }
 
+resolve_media_share_url() {
+    local project_dir="${1:-}"
+    resolve_path_from_env_file "MEDIA_SHARE_URL" "" "$project_dir"
+}
+
 get_env_value_from_project() {
     local key="$1"
     local project_dir="${2:-}"
@@ -93,6 +98,47 @@ media_mount_reason() {
 media_mount_ready() {
     local project_dir="${1:-}"
     [[ -z "$(media_mount_reason "$project_dir")" ]]
+}
+
+mount_media_share() {
+    local project_dir="${1:-}"
+    local wait_seconds="${2:-30}"
+    local media_dir share_url deadline
+
+    media_dir="$(resolve_media_dir "$project_dir")"
+    share_url="$(resolve_media_share_url "$project_dir")"
+
+    if ! media_dir_requires_mount "$project_dir"; then
+        return 1
+    fi
+
+    if [[ -z "$share_url" ]]; then
+        return 1
+    fi
+
+    if media_mount_ready "$project_dir"; then
+        return 0
+    fi
+
+    if [[ "$(media_mount_reason "$project_dir")" != "missing_mount" ]]; then
+        return 1
+    fi
+
+    if ! command -v open >/dev/null 2>&1; then
+        return 1
+    fi
+
+    open -g "$share_url" >/dev/null 2>&1 || return 1
+
+    deadline=$((SECONDS + wait_seconds))
+    while (( SECONDS < deadline )); do
+        if media_mount_ready "$project_dir"; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    media_mount_ready "$project_dir"
 }
 
 mount_dependent_services() {

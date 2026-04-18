@@ -50,6 +50,14 @@ timestamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
 log() { echo "$(timestamp) $1" >> "$LOG"; }
 
+refresh_media_state() {
+    MEDIA_MOUNT_REASON="$(media_mount_reason "$PROJECT_DIR")"
+    MEDIA_READY=false
+    if media_mount_ready "$PROJECT_DIR"; then
+        MEDIA_READY=true
+    fi
+}
+
 container_exists() {
     local name="$1"
     docker inspect "$name" >/dev/null 2>&1
@@ -439,6 +447,21 @@ if [[ -f "$LOG" ]] && [[ $(wc -l < "$LOG") -gt 800 ]]; then
 fi
 
 log "--- Health check started ---"
+
+if [[ "$MEDIA_READY" != true && "$MEDIA_MOUNT_REASON" == "missing_mount" ]]; then
+    if [[ -n "$(resolve_media_share_url "$PROJECT_DIR")" ]]; then
+        log "INFO: Attempting to mount configured media share for $MEDIA_DIR"
+        if mount_media_share "$PROJECT_DIR" 45; then
+            refresh_media_state
+            log "OK: Media mount became ready at $MEDIA_DIR"
+        else
+            refresh_media_state
+            log "WARN: Media share mount attempt did not make $MEDIA_DIR ready"
+        fi
+    else
+        log "INFO: MEDIA_SHARE_URL is not configured; skipping auto-mount attempt for $MEDIA_DIR"
+    fi
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
     log "ERROR: docker CLI not found in PATH. Cannot heal."

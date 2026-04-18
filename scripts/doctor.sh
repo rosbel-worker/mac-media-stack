@@ -79,6 +79,7 @@ MEDIA_SERVER="$(get_env_value_from_project "MEDIA_SERVER" "$SCRIPT_DIR")"
 MEDIA_SERVER="${MEDIA_SERVER:-plex}"
 VPN_PROVIDER="$(get_env_value_from_project "VPN_PROVIDER" "$SCRIPT_DIR")"
 VPN_PROVIDER="${VPN_PROVIDER:-protonvpn}"
+MEDIA_SHARE_URL="$(resolve_media_share_url "$SCRIPT_DIR")"
 
 get_env_value() {
     local key="$1"
@@ -194,6 +195,12 @@ else
 fi
 
 if media_dir_requires_mount "$SCRIPT_DIR"; then
+    if [[ -n "$MEDIA_SHARE_URL" ]]; then
+        ok "MEDIA_SHARE_URL is set for boot-time auto-mount"
+    else
+        warn "MEDIA_SHARE_URL is empty; /Volumes media shares will still need a manual mount after reboot"
+    fi
+
     if media_mount_ready "$SCRIPT_DIR"; then
         ok "Media mount is present and ready: $MEDIA_DIR"
     else
