@@ -16,7 +16,7 @@ services:
       - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
       - TZ=${TIMEZONE:-America/New_York}
     ports:
-      - 127.0.0.1:8080:8080    # qbittorrent webui
+      - ${QBITTORRENT_BIND_IP:-127.0.0.1}:8080:8080    # qbittorrent webui
     restart: unless-stopped
 
   qbittorrent:
@@ -52,7 +52,7 @@ services:
     volumes:
       - ${CONFIG_DIR}/prowlarr:/config
     ports:
-      - 127.0.0.1:9696:9696
+      - ${PROWLARR_BIND_IP:-127.0.0.1}:9696:9696
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9696/ping || exit 1"]
       interval: 30s
@@ -72,7 +72,7 @@ services:
       - ${MEDIA_DIR}/TV Shows:/tv
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
-      - 127.0.0.1:8989:8989
+      - ${SONARR_BIND_IP:-127.0.0.1}:8989:8989
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8989/ping || exit 1"]
       interval: 30s
@@ -92,7 +92,7 @@ services:
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/Downloads:/downloads
     ports:
-      - 127.0.0.1:7878:7878
+      - ${RADARR_BIND_IP:-127.0.0.1}:7878:7878
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:7878/ping || exit 1"]
       interval: 30s
@@ -112,7 +112,7 @@ services:
       - ${MEDIA_DIR}/Movies:/movies
       - ${MEDIA_DIR}/TV Shows:/tv
     ports:
-      - 127.0.0.1:6767:6767
+      - ${BAZARR_BIND_IP:-127.0.0.1}:6767:6767
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:6767/ping || exit 1"]
       interval: 30s
@@ -128,7 +128,7 @@ services:
       - LOG_HTML=false
       - TZ=${TIMEZONE:-America/New_York}
     ports:
-      - 127.0.0.1:8191:8191
+      - ${FLARESOLVERR_BIND_IP:-127.0.0.1}:8191:8191
     restart: unless-stopped
 
   seerr:

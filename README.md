@@ -203,7 +203,7 @@ bash scripts/health-check.sh
 See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
 Pinned digest matrix: [IMAGE_LOCK.md](IMAGE_LOCK.md)
 
-By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEERR_BIND_IP=0.0.0.0` in `.env` only if you intentionally want LAN exposure.
+By default, service web UIs are bound to `127.0.0.1` for safer local-only access. To intentionally expose selected services on LAN/Tailnet, set the corresponding `*_BIND_IP=0.0.0.0` values in `.env` (for example `SEERR_BIND_IP`, `SONARR_BIND_IP`, `RADARR_BIND_IP`, `PROWLARR_BIND_IP`, `BAZARR_BIND_IP`, `QBITTORRENT_BIND_IP`, `FLARESOLVERR_BIND_IP`).
 
 ## Scripts
 
@@ -219,6 +219,8 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/update-images.sh` | Safe image-only updater with approval gate, health-check, rollback, and auto-commit |
 | `scripts/mount-media-share.sh` | Manually mount `MEDIA_SHARE_URL` and wait for `MEDIA_DIR` to become ready |
 | `scripts/refresh-image-lock.sh` | Low-level digest refresher (used by `scripts/update-images.sh`) |
+
+When changing web UI exposure, prefer editing `.env` bind variables (for example `SONARR_BIND_IP=0.0.0.0`) and then redeploying with `docker compose up -d` followed by `bash scripts/health-check.sh`.
 
 Local path/runbook reference is generated at `~/home-media-stack/README.md` each time `scripts/setup.sh` runs.
 
